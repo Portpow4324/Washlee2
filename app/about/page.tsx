@@ -175,9 +175,11 @@ export default function AboutUs() {
           {/* CTA */}
           <div className="text-center">
             <h2 className="text-3xl font-bold text-dark mb-6">Ready to Experience Washlee?</h2>
-            <Link href="/booking">
-              <Button size="lg" className="text-white">Book Your First Order</Button>
-            </Link>
+            <div className="flex justify-center">
+              <Link href="/booking">
+                <Button size="lg" className="text-white">Book Your First Order</Button>
+              </Link>
+            </div>
           </div>
         </section>
       </main>

@@ -8,8 +8,8 @@ import Footer from '@/components/Footer'
 import Button from '@/components/Button'
 import Card from '@/components/Card'
 import { Clock, MapPin, Droplet, Wind, Truck, CheckCircle, ChevronRight, AlertCircle, Mail, Phone } from 'lucide-react'
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import Spinner from '@/components/Spinner'
+import { AddressParts } from '@/lib/googlePlaces'
 
 // Australian postcode validation helper
 const validateAustralianPostcode = (postcode: string): boolean => {
@@ -61,13 +61,28 @@ export default function Booking() {
     specialCare: '',
     foldingPreference: 'folded', // 'folded' or 'hanging'
     
-    // Step 3: Delivery
+    // Step 3: Weight & Add-ons
+    estimatedWeight: '5', // kg
+    addOns: {
+      hangDry: false,
+      delicatesCare: false,
+      comforterService: false,
+      stainTreatment: 0, // number of items
+      ironing: false,
+    },
+    
+    // Step 4: Delivery
     deliverySpeed: 'standard', // 'standard' or 'same-day'
     deliveryAddress: userData?.address || '',
+    deliveryAddressDetails: null as AddressParts | null,
+    // Essential address fields
+    deliveryAddressLine1: '', // Street address
+    deliveryAddressLine2: '', // Unit/Apartment
+    deliveryCity: '', // City/Suburb
+    deliveryState: '', // State/Province
+    deliveryPostcode: '', // Postcode/ZIP
+    deliveryCountry: 'Australia', // Country
     deliveryNotes: '',
-    
-    // Step 4: Laundry Details
-    estimatedWeight: '5', // kg
   })
 
   // Validation feedback states
@@ -102,11 +117,16 @@ export default function Booking() {
     },
     {
       number: 3,
+      title: 'Weight & Add-ons',
+      description: 'Choose weight and select add-on services',
+    },
+    {
+      number: 4,
       title: 'Delivery Options',
       description: 'Choose delivery speed and location',
     },
     {
-      number: 4,
+      number: 5,
       title: 'Review & Confirm',
       description: 'Review your order and confirm',
     },
@@ -114,26 +134,12 @@ export default function Booking() {
 
   const handleNext = () => {
     if (validateStep(currentStep)) {
-      if (currentStep < 4) {
+      if (currentStep < 5) {
         setCurrentStep(currentStep + 1)
       } else {
         handleSubmitOrder()
       }
       setError('')
-    }
-  }
-
-  // Handle delivery address change with real-time validation
-  const handleAddressChange = (newAddress: string) => {
-    setBookingData({ ...bookingData, deliveryAddress: newAddress })
-    
-    // Update validation state
-    if (!newAddress.trim()) {
-      setAddressValidation('empty')
-    } else if (validateAustralianAddress(newAddress)) {
-      setAddressValidation('valid')
-    } else {
-      setAddressValidation('invalid')
     }
   }
 
@@ -150,12 +156,20 @@ export default function Booking() {
       case 2:
         return true
       case 3:
+        const weight = parseFloat(bookingData.estimatedWeight)
+        const minTotal = weight * 3.0
+        if (minTotal < 15) {
+          setError('Minimum order is $15.00. Please select at least 5 kg or add premium services.')
+          return false
+        }
+        return true
+      case 4:
         if (!bookingData.deliveryAddress) {
           setError('Please provide a delivery address')
           return false
         }
-        if (!validateAustralianAddress(bookingData.deliveryAddress)) {
-          setError('❌ Delivery address must be in Australia. Please enter a valid Australian address (include suburb/state).')
+        if (!bookingData.deliveryAddressDetails) {
+          setError('❌ Please select a valid Australian address from the suggestions')
           return false
         }
         // Use email from userData OR firebase user - fallback to prevent false negatives
@@ -169,7 +183,7 @@ export default function Booking() {
           return false
         }
         return true
-      case 4:
+      case 5:
         if (!agreedToTerms) {
           setError('Please agree to the Terms of Service')
           return false
@@ -187,65 +201,95 @@ export default function Booking() {
     try {
       if (!user) throw new Error('User not found')
 
-      const orderTotal = parseFloat(bookingData.estimatedWeight) * 3.0 + (bookingData.deliverySpeed === 'same-day' ? 5.0 : 0)
+      // Calculate base laundry cost
+      let orderTotal = parseFloat(bookingData.estimatedWeight) * 3.0
+      
+      // Add premium services
+      if (bookingData.addOns.hangDry) orderTotal += parseFloat(bookingData.estimatedWeight) * 3.30
+      if (bookingData.addOns.delicatesCare) orderTotal += parseFloat(bookingData.estimatedWeight) * 4.40
+      if (bookingData.addOns.comforterService) orderTotal += 25.0
+      if (bookingData.addOns.stainTreatment > 0) orderTotal += bookingData.addOns.stainTreatment * 0.50
+      if (bookingData.addOns.ironing) orderTotal += parseFloat(bookingData.estimatedWeight) * 6.60
+      
+      // Add delivery
+      if (bookingData.deliverySpeed === 'same-day') orderTotal += 5.0
 
-      const ordersRef = collection(db, 'orders')
-      const docRef = await addDoc(ordersRef, {
-        userId: user.uid,
-        customerName: userData?.name || 'Customer',
-        customerEmail: user.email,
-        customerPhone: userData?.phone || '',
-        
-        // Pickup details
-        pickupTime: bookingData.pickupTime === 'soon' ? 'ASAP' : `${bookingData.scheduleDate} ${bookingData.scheduleTime}`,
-        pickupAddress: userData?.address || 'To be provided',
-        
-        // Laundry preferences
-        detergent: bookingData.detergent,
-        waterTemperature: bookingData.waterTemp,
-        specialCare: bookingData.specialCare,
-        foldingPreference: bookingData.foldingPreference,
-        estimatedWeight: parseFloat(bookingData.estimatedWeight),
-        
-        // Delivery
-        deliverySpeed: bookingData.deliverySpeed,
-        deliveryAddress: bookingData.deliveryAddress,
-        deliveryNotes: bookingData.deliveryNotes,
-        
-        // Order status
-        status: 'pending', // pending, confirmed, picked_up, in_washing, ready_for_delivery, delivered
-        createdAt: serverTimestamp(),
-        
-        // Pricing
-        baseCost: parseFloat(bookingData.estimatedWeight) * 3.0, // $3 per kg
-        deliveryCost: bookingData.deliverySpeed === 'same-day' ? 5.0 : 0,
-        subtotal: orderTotal,
+      // Validate minimum purchase amount
+      if (orderTotal < 24) {
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('[BOOKING] Creating order via API...')
+      
+      // Create order in Firestore via API (server-side, bypasses client offline issues)
+      const orderResponse = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.uid,
+          customerName: userData?.name || 'Customer',
+          customerEmail: user.email,
+          customerPhone: userData?.phone || '',
+          bookingData,
+          orderTotal,
+        }),
       })
 
+      let firestoreOrderId = null
+      
+      if (orderResponse.ok) {
+        const orderData = await orderResponse.json()
+        firestoreOrderId = orderData.orderId
+        console.log('[BOOKING] ✓ Order created in Firestore:', firestoreOrderId)
+      } else {
+        const errorData = await orderResponse.json()
+        console.warn('[BOOKING] Failed to create order in Firestore:', errorData.error)
+        // Continue anyway - order can be created after payment
+      }
+
+      // Generate order ID for Stripe (use Firestore ID if available, otherwise temp ID)
+      const orderId = firestoreOrderId || `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      
+      console.log('[BOOKING] Proceeding with order ID:', orderId)
+      console.log('[BOOKING] Creating Stripe checkout session...')
+      console.log('[BOOKING] Order total:', orderTotal)
+      
       // Create Stripe checkout session
       const checkoutResponse = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orderId: docRef.id,
+          orderId,
           orderTotal,
           customerEmail: user.email,
           customerName: userData?.name || 'Customer',
+          bookingData,
         }),
       })
 
+      console.log('[BOOKING] Checkout response status:', checkoutResponse.status)
+
       if (!checkoutResponse.ok) {
-        throw new Error('Failed to create checkout session')
+        const errorData = await checkoutResponse.json()
+        console.error('[BOOKING] Checkout error:', errorData)
+        throw new Error(errorData.error || 'Failed to create checkout session')
       }
 
-      const { sessionId, url } = await checkoutResponse.json()
+      const { sessionId, url, success } = await checkoutResponse.json()
+      
+      console.log('[BOOKING] Checkout session created:', { sessionId, success })
+      console.log('[BOOKING] Stripe URL present:', !!url)
       
       // Redirect to Stripe checkout
       if (url) {
+        console.log('[BOOKING] ✅ Redirecting to Stripe checkout...')
         window.location.href = url
+      } else {
+        throw new Error('No checkout URL received from server')
       }
     } catch (err: any) {
-      console.error('Order error:', err)
+      console.error('[BOOKING] Order error:', err)
       setError(err.message || 'Failed to create order. Please try again.')
     } finally {
       setIsLoading(false)
@@ -254,7 +298,14 @@ export default function Booking() {
 
   // Success screen
   if (orderConfirmed) {
-    const totalCost = parseFloat(bookingData.estimatedWeight) * 3.0 + (bookingData.deliverySpeed === 'same-day' ? 5.0 : 0)
+    // Calculate total cost
+    let totalCost = parseFloat(bookingData.estimatedWeight) * 3.0
+    if (bookingData.addOns.hangDry) totalCost += parseFloat(bookingData.estimatedWeight) * 3.30
+    if (bookingData.addOns.delicatesCare) totalCost += parseFloat(bookingData.estimatedWeight) * 4.40
+    if (bookingData.addOns.comforterService) totalCost += 25.0
+    if (bookingData.addOns.stainTreatment > 0) totalCost += bookingData.addOns.stainTreatment * 0.50
+    if (bookingData.addOns.ironing) totalCost += parseFloat(bookingData.estimatedWeight) * 6.60
+    if (bookingData.deliverySpeed === 'same-day') totalCost += 5.0
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-mint to-white flex flex-col">
@@ -340,6 +391,18 @@ export default function Booking() {
   return (
     <div className="min-h-screen bg-light flex flex-col">
       <Header />
+      
+      {/* Loading Overlay */}
+      {isLoading && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 shadow-lg text-center">
+            <Spinner />
+            <p className="mt-4 text-dark font-semibold">Processing your order...</p>
+            <p className="mt-2 text-sm text-gray">Please wait while we set up your payment</p>
+          </div>
+        </div>
+      )}
+      
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-12">
         {/* Progress Indicator with Clickable Steps */}
         <div className="mb-16">
@@ -552,8 +615,252 @@ export default function Booking() {
           </div>
         )}
 
-        {/* Step 3: Delivery */}
+        {/* Step 3: Weight & Add-ons */}
         {currentStep === 3 && (
+          <div className="max-w-2xl mx-auto">
+            <Card className="p-8 mb-8">
+              <h2 className="text-2xl font-bold text-dark mb-2">Laundry Weight & Add-ons</h2>
+              <p className="text-gray mb-8">Minimum order: <span className="font-semibold text-primary">$24.00</span> (8 kg base service)</p>
+
+              <div className="space-y-8">
+                {/* Weight Selection */}
+                <div>
+                  <label className="block text-sm font-semibold text-dark mb-4">Laundry Weight (kg)</label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                    {['5', '8', '11', '15', '20', '23', '30', '34'].map((weight) => (
+                      <button
+                        key={weight}
+                        onClick={() => setBookingData({ ...bookingData, estimatedWeight: weight })}
+                        className={`py-3 px-4 rounded-lg font-semibold transition border-2 ${
+                          bookingData.estimatedWeight === weight
+                            ? 'bg-primary text-white border-primary'
+                            : 'border-gray text-dark hover:border-primary bg-white'
+                        }`}
+                      >
+                        {weight} kg
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="number"
+                    min="5"
+                    max="50"
+                    value={bookingData.estimatedWeight}
+                    onChange={(e) => setBookingData({ ...bookingData, estimatedWeight: e.target.value || '5' })}
+                    placeholder="Custom weight"
+                    className="w-full px-4 py-3 border border-gray rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+
+                {/* Base Service Cost */}
+                <div className="bg-light rounded-lg p-6 border border-gray">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-dark font-semibold">Base Service ({bookingData.estimatedWeight} kg @ $3.00/kg)</span>
+                    <span className="text-xl font-bold text-primary">${(parseFloat(bookingData.estimatedWeight) * 3.0).toFixed(2)}</span>
+                  </div>
+                  <p className="text-sm text-gray">Professional washing, drying, folding & next-day delivery</p>
+                </div>
+
+                {/* Add-ons Section */}
+                <div>
+                  <h3 className="text-lg font-semibold text-dark mb-4">Premium Add-ons (Optional)</h3>
+                  <div className="space-y-3">
+                    {/* Hang Dry */}
+                    <label className="flex items-center justify-between p-4 border-2 border-gray rounded-lg cursor-pointer hover:border-primary transition"
+                      onClick={() => setBookingData({ 
+                        ...bookingData, 
+                        addOns: { ...bookingData.addOns, hangDry: !bookingData.addOns.hangDry }
+                      })}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={bookingData.addOns.hangDry}
+                          onChange={() => {}}
+                          className="w-5 h-5"
+                        />
+                        <div>
+                          <p className="font-semibold text-dark">Hang Dry</p>
+                          <p className="text-sm text-gray">Preserve fabric quality</p>
+                        </div>
+                      </div>
+                      <span className="font-bold text-primary">+${(parseFloat(bookingData.estimatedWeight) * 3.30).toFixed(2)}</span>
+                    </label>
+
+                    {/* Delicates Care */}
+                    <label className="flex items-center justify-between p-4 border-2 border-gray rounded-lg cursor-pointer hover:border-primary transition"
+                      onClick={() => setBookingData({ 
+                        ...bookingData, 
+                        addOns: { ...bookingData.addOns, delicatesCare: !bookingData.addOns.delicatesCare }
+                      })}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={bookingData.addOns.delicatesCare}
+                          onChange={() => {}}
+                          className="w-5 h-5"
+                        />
+                        <div>
+                          <p className="font-semibold text-dark">Delicates Care</p>
+                          <p className="text-sm text-gray">Gentle wash for silk, lace & fine fabrics</p>
+                        </div>
+                      </div>
+                      <span className="font-bold text-primary">+${(parseFloat(bookingData.estimatedWeight) * 4.40).toFixed(2)}</span>
+                    </label>
+
+                    {/* Comforter Service */}
+                    <label className="flex items-center justify-between p-4 border-2 border-gray rounded-lg cursor-pointer hover:border-primary transition"
+                      onClick={() => setBookingData({ 
+                        ...bookingData, 
+                        addOns: { ...bookingData.addOns, comforterService: !bookingData.addOns.comforterService }
+                      })}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={bookingData.addOns.comforterService}
+                          onChange={() => {}}
+                          className="w-5 h-5"
+                        />
+                        <div>
+                          <p className="font-semibold text-dark">Comforter Service</p>
+                          <p className="text-sm text-gray">Dedicated washing for large items</p>
+                        </div>
+                      </div>
+                      <span className="font-bold text-primary">+$25.00</span>
+                    </label>
+
+                    {/* Stain Treatment */}
+                    <div className="flex items-center justify-between p-4 border-2 border-gray rounded-lg hover:border-primary transition">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={bookingData.addOns.stainTreatment > 0}
+                          onChange={(e) => setBookingData({
+                            ...bookingData,
+                            addOns: { ...bookingData.addOns, stainTreatment: e.target.checked ? 1 : 0 }
+                          })}
+                          className="w-5 h-5 cursor-pointer"
+                        />
+                        <div>
+                          <p className="font-semibold text-dark">Stain Treatment</p>
+                          <p className="text-sm text-gray">Professional pre-treatment per item</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {bookingData.addOns.stainTreatment > 0 && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setBookingData({
+                                ...bookingData,
+                                addOns: { ...bookingData.addOns, stainTreatment: Math.max(0, bookingData.addOns.stainTreatment - 1) }
+                              })}
+                              className="w-8 h-8 rounded border border-gray hover:bg-light"
+                            >
+                              −
+                            </button>
+                            <span className="w-8 text-center font-bold">{bookingData.addOns.stainTreatment}</span>
+                            <button
+                              onClick={() => setBookingData({
+                                ...bookingData,
+                                addOns: { ...bookingData.addOns, stainTreatment: bookingData.addOns.stainTreatment + 1 }
+                              })}
+                              className="w-8 h-8 rounded border border-gray hover:bg-light"
+                            >
+                              +
+                            </button>
+                          </div>
+                        )}
+                        <span className="font-bold text-primary min-w-16 text-right">{bookingData.addOns.stainTreatment > 0 ? `+$${(bookingData.addOns.stainTreatment * 0.50).toFixed(2)}` : '+$0.50'}</span>
+                      </div>
+                    </div>
+
+                    {/* Ironing */}
+                    <label className="flex items-center justify-between p-4 border-2 border-gray rounded-lg cursor-pointer hover:border-primary transition"
+                      onClick={() => setBookingData({ 
+                        ...bookingData, 
+                        addOns: { ...bookingData.addOns, ironing: !bookingData.addOns.ironing }
+                      })}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={bookingData.addOns.ironing}
+                          onChange={() => {}}
+                          className="w-5 h-5"
+                        />
+                        <div>
+                          <p className="font-semibold text-dark">Ironing</p>
+                          <p className="text-sm text-gray">Professional ironing service</p>
+                        </div>
+                      </div>
+                      <span className="font-bold text-primary">+${(parseFloat(bookingData.estimatedWeight) * 6.60).toFixed(2)}</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Price Summary */}
+                <div className="bg-light rounded-lg p-6 border-2 border-primary">
+                  <h3 className="font-semibold text-dark mb-4">Price Breakdown</h3>
+                  <div className="space-y-3 mb-4">
+                    <div className="flex justify-between">
+                      <span className="text-gray">Base Service:</span>
+                      <span className="font-semibold">${(parseFloat(bookingData.estimatedWeight) * 3.0).toFixed(2)}</span>
+                    </div>
+                    {bookingData.addOns.hangDry && (
+                      <div className="flex justify-between">
+                        <span className="text-gray">Hang Dry:</span>
+                        <span className="font-semibold">+${(parseFloat(bookingData.estimatedWeight) * 3.30).toFixed(2)}</span>
+                      </div>
+                    )}
+                    {bookingData.addOns.delicatesCare && (
+                      <div className="flex justify-between">
+                        <span className="text-gray">Delicates Care:</span>
+                        <span className="font-semibold">+${(parseFloat(bookingData.estimatedWeight) * 4.40).toFixed(2)}</span>
+                      </div>
+                    )}
+                    {bookingData.addOns.comforterService && (
+                      <div className="flex justify-between">
+                        <span className="text-gray">Comforter Service:</span>
+                        <span className="font-semibold">+$25.00</span>
+                      </div>
+                    )}
+                    {bookingData.addOns.stainTreatment > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray">Stain Treatment ({bookingData.addOns.stainTreatment} items):</span>
+                        <span className="font-semibold">+${(bookingData.addOns.stainTreatment * 0.50).toFixed(2)}</span>
+                      </div>
+                    )}
+                    {bookingData.addOns.ironing && (
+                      <div className="flex justify-between">
+                        <span className="text-gray">Ironing:</span>
+                        <span className="font-semibold">+${(parseFloat(bookingData.estimatedWeight) * 6.60).toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t border-gray pt-3">
+                      <span className="font-bold text-dark">Subtotal:</span>
+                      <span className="text-xl font-bold text-primary">
+                        ${(
+                          parseFloat(bookingData.estimatedWeight) * 3.0 +
+                          (bookingData.addOns.hangDry ? parseFloat(bookingData.estimatedWeight) * 3.30 : 0) +
+                          (bookingData.addOns.delicatesCare ? parseFloat(bookingData.estimatedWeight) * 4.40 : 0) +
+                          (bookingData.addOns.comforterService ? 25.0 : 0) +
+                          (bookingData.addOns.stainTreatment * 0.50) +
+                          (bookingData.addOns.ironing ? parseFloat(bookingData.estimatedWeight) * 6.60 : 0)
+                        ).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray">Same-day delivery (+$5.00) can be added in the next step</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Step 4: Delivery */}
+        {currentStep === 4 && (
           <div className="max-w-2xl mx-auto">
             <Card className="p-8 mb-8">
               <h2 className="text-2xl font-bold text-dark mb-6">Delivery Options</h2>
@@ -595,54 +902,145 @@ export default function Booking() {
                   </div>
                 </div>
 
-                {/* Delivery Address */}
-                <div>
-                  <label className="block text-sm font-semibold text-dark mb-2">Delivery Address</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={bookingData.deliveryAddress}
-                      onChange={(e) => handleAddressChange(e.target.value)}
-                      placeholder="123 Main St, Apt 4B, Sydney NSW 2000"
-                      className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 transition ${
-                        addressValidation === 'valid'
-                          ? 'border-green-500 focus:ring-green-500'
-                          : addressValidation === 'invalid'
-                          ? 'border-red-500 focus:ring-red-500'
-                          : 'border-gray focus:ring-primary'
-                      }`}
-                    />
-                    {/* Validation Icons */}
+                {/* Delivery Address Fields - Separate Boxes */}
+                <div className="bg-light rounded-lg p-6 border border-gray">
+                  <h3 className="font-semibold text-dark mb-4">Delivery Address Details</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Address Line 1 */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-semibold text-dark mb-2">Address Line 1 (Street Address)</label>
+                      <input
+                        type="text"
+                        value={bookingData.deliveryAddressLine1}
+                        onChange={(e) => setBookingData({ ...bookingData, deliveryAddressLine1: e.target.value })}
+                        placeholder="24 Balmain Street"
+                        className="w-full px-4 py-3 border border-gray rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+
+                    {/* Address Line 2 - Unit/Apartment */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-semibold text-dark mb-2">Address Line 2 (Unit/Apartment - Optional)</label>
+                      <input
+                        type="text"
+                        value={bookingData.deliveryAddressLine2}
+                        onChange={(e) => setBookingData({ ...bookingData, deliveryAddressLine2: e.target.value })}
+                        placeholder="e.g., Apt 10, Unit 4B"
+                        className="w-full px-4 py-3 border border-gray rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+
+                    {/* City/Suburb */}
+                    <div>
+                      <label className="block text-sm font-semibold text-dark mb-2">City/Suburb</label>
+                      <input
+                        type="text"
+                        value={bookingData.deliveryCity}
+                        onChange={(e) => setBookingData({ ...bookingData, deliveryCity: e.target.value })}
+                        placeholder="Sydney"
+                        className="w-full px-4 py-3 border border-gray rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+
+                    {/* State/Province */}
+                    <div>
+                      <label className="block text-sm font-semibold text-dark mb-2">State/Province</label>
+                      <input
+                        type="text"
+                        value={bookingData.deliveryState}
+                        onChange={(e) => setBookingData({ ...bookingData, deliveryState: e.target.value })}
+                        placeholder="NSW"
+                        className="w-full px-4 py-3 border border-gray rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+
+                    {/* Postcode/ZIP */}
+                    <div>
+                      <label className="block text-sm font-semibold text-dark mb-2">Postcode/ZIP</label>
+                      <input
+                        type="text"
+                        value={bookingData.deliveryPostcode}
+                        onChange={(e) => setBookingData({ ...bookingData, deliveryPostcode: e.target.value })}
+                        placeholder="2000"
+                        className="w-full px-4 py-3 border border-gray rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+
+                    {/* Country */}
+                    <div>
+                      <label className="block text-sm font-semibold text-dark mb-2">Country</label>
+                      <input
+                        type="text"
+                        value={bookingData.deliveryCountry}
+                        onChange={(e) => setBookingData({ ...bookingData, deliveryCountry: e.target.value })}
+                        placeholder="Australia"
+                        className="w-full px-4 py-3 border border-gray rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Verify Address Button */}
+                  <div className="mt-6">
+                    <Button
+                      onClick={async () => {
+                        // Construct full address for verification
+                        // Format: Unit/Apt + Street Address, Suburb, State Postcode
+                        let streetPart = bookingData.deliveryAddressLine1
+                        if (bookingData.deliveryAddressLine2) {
+                          streetPart = `${bookingData.deliveryAddressLine2}/${bookingData.deliveryAddressLine1}`
+                        }
+                        const fullAddress = `${streetPart}, ${bookingData.deliveryCity}, ${bookingData.deliveryState} ${bookingData.deliveryPostcode}, ${bookingData.deliveryCountry}`
+                        
+                        console.log('Verifying address:', fullAddress)
+                        
+                        try {
+                          setIsLoading(true)
+                          const response = await fetch('/api/places/verify', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ address: fullAddress })
+                          })
+                          
+                          const data = await response.json()
+                          console.log('Verification response:', data)
+                          
+                          if (data.success) {
+                            setAddressValidation('valid')
+                            setError('')
+                            setBookingData({
+                              ...bookingData,
+                              deliveryAddressDetails: data.details || null,
+                              deliveryAddress: data.formattedAddress || fullAddress,
+                            })
+                          } else {
+                            setAddressValidation('invalid')
+                            setError(data.message || 'Address could not be verified. Please check and try again.')
+                          }
+                        } catch (err) {
+                          setAddressValidation('invalid')
+                          setError('Error verifying address. Please try again.')
+                          console.error('Address verification error:', err)
+                        } finally {
+                          setIsLoading(false)
+                        }
+                      }}
+                      className="w-full"
+                      disabled={!bookingData.deliveryAddressLine1 || !bookingData.deliveryCity || !bookingData.deliveryPostcode}
+                    >
+                      {isLoading ? 'Verifying Address...' : 'Verify Address with Google Maps'}
+                    </Button>
                     {addressValidation === 'valid' && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                        </svg>
-                      </div>
+                      <p className="text-sm text-green-600 mt-2 flex items-center gap-2">
+                        <CheckCircle size={16} /> Address verified successfully
+                      </p>
                     )}
-                    {addressValidation === 'invalid' && bookingData.deliveryAddress.trim() && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                        </svg>
-                      </div>
+                    {addressValidation === 'invalid' && error && (
+                      <p className="text-sm text-red-600 mt-2 flex items-center gap-2">
+                        <AlertCircle size={16} /> {error}
+                      </p>
                     )}
                   </div>
-                  
-                  {/* Validation Feedback Messages */}
-                  {addressValidation === 'valid' && (
-                    <p className="mt-2 text-sm text-green-600 flex items-center gap-2">
-                      <CheckCircle size={16} />
-                      Valid Australian address
-                    </p>
-                  )}
-                  {addressValidation === 'invalid' && bookingData.deliveryAddress.trim() && (
-                    <p className="mt-2 text-sm text-red-600 flex items-center gap-2">
-                      <AlertCircle size={16} />
-                      Address must be in Australia (include suburb/state)
-                    </p>
-                  )}
-                  <p className="mt-1 text-xs text-gray">Include suburb and state (e.g., Sydney NSW, Melbourne VIC)</p>
                 </div>
 
                 {/* Delivery Notes */}
@@ -661,8 +1059,8 @@ export default function Booking() {
           </div>
         )}
 
-        {/* Step 4: Review */}
-        {currentStep === 4 && (
+        {/* Step 5: Review */}
+        {currentStep === 5 && (
           <div className="max-w-2xl mx-auto">
             <Card className="p-8 mb-8">
               <h2 className="text-2xl font-bold text-dark mb-6">Review Your Order</h2>
@@ -700,15 +1098,90 @@ export default function Booking() {
                   </div>
                 </div>
 
+                {/* Delivery Address - Essential Fields */}
+                <div>
+                  <h3 className="font-bold text-dark mb-4">Essential Delivery Address Fields</h3>
+                  
+                  <div className="space-y-3">
+                    {/* Address Line 1 */}
+                    <div className="bg-white border-2 border-primary rounded-lg p-4">
+                      <p className="text-xs font-semibold uppercase text-primary tracking-wider mb-1">Address Line 1</p>
+                      <p className="text-lg font-bold text-dark">{bookingData.deliveryAddressLine1 || '—'}</p>
+                      <p className="text-xs text-gray mt-1">(Street Address)</p>
+                    </div>
+
+                    {/* Address Line 2 */}
+                    <div className="bg-white border-2 border-accent rounded-lg p-4">
+                      <p className="text-xs font-semibold uppercase text-accent tracking-wider mb-1">Address Line 2</p>
+                      <p className="text-lg font-bold text-dark">{bookingData.deliveryAddressLine2 || '—'}</p>
+                      <p className="text-xs text-gray mt-1">(Unit/Apartment - Optional)</p>
+                    </div>
+
+                    {/* City/Suburb */}
+                    <div className="bg-white border-2 border-primary rounded-lg p-4">
+                      <p className="text-xs font-semibold uppercase text-primary tracking-wider mb-1">City/Suburb</p>
+                      <p className="text-lg font-bold text-dark">{bookingData.deliveryCity || '—'}</p>
+                    </div>
+
+                    {/* State/Province */}
+                    <div className="bg-white border-2 border-primary rounded-lg p-4">
+                      <p className="text-xs font-semibold uppercase text-primary tracking-wider mb-1">State/Province</p>
+                      <p className="text-lg font-bold text-dark">{bookingData.deliveryState || '—'}</p>
+                    </div>
+
+                    {/* Postcode/ZIP */}
+                    <div className="bg-white border-2 border-primary rounded-lg p-4">
+                      <p className="text-xs font-semibold uppercase text-primary tracking-wider mb-1">Postcode/ZIP</p>
+                      <p className="text-lg font-bold text-dark">{bookingData.deliveryPostcode || '—'}</p>
+                    </div>
+
+                    {/* Country */}
+                    <div className="bg-white border-2 border-primary rounded-lg p-4">
+                      <p className="text-xs font-semibold uppercase text-primary tracking-wider mb-1">Country</p>
+                      <p className="text-lg font-bold text-dark">{bookingData.deliveryCountry || '—'}</p>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Pricing */}
                 <div className="bg-mint rounded-lg p-6">
-                  <h3 className="font-bold text-dark mb-4">Pricing</h3>
+                  <h3 className="font-bold text-dark mb-4">Pricing Breakdown</h3>
                   
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray">{bookingData.estimatedWeight} kg @ $3.00/kg:</span>
+                      <span className="text-gray">Base Service ({bookingData.estimatedWeight} kg @ $3.00/kg):</span>
                       <span className="font-semibold text-dark">${(parseFloat(bookingData.estimatedWeight) * 3.0).toFixed(2)}</span>
                     </div>
+                    {bookingData.addOns.hangDry && (
+                      <div className="flex justify-between">
+                        <span className="text-gray">Hang Dry:</span>
+                        <span className="font-semibold text-dark">+${(parseFloat(bookingData.estimatedWeight) * 3.30).toFixed(2)}</span>
+                      </div>
+                    )}
+                    {bookingData.addOns.delicatesCare && (
+                      <div className="flex justify-between">
+                        <span className="text-gray">Delicates Care:</span>
+                        <span className="font-semibold text-dark">+${(parseFloat(bookingData.estimatedWeight) * 4.40).toFixed(2)}</span>
+                      </div>
+                    )}
+                    {bookingData.addOns.comforterService && (
+                      <div className="flex justify-between">
+                        <span className="text-gray">Comforter Service:</span>
+                        <span className="font-semibold text-dark">+$25.00</span>
+                      </div>
+                    )}
+                    {bookingData.addOns.stainTreatment > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray">Stain Treatment ({bookingData.addOns.stainTreatment} items):</span>
+                        <span className="font-semibold text-dark">+${(bookingData.addOns.stainTreatment * 0.50).toFixed(2)}</span>
+                      </div>
+                    )}
+                    {bookingData.addOns.ironing && (
+                      <div className="flex justify-between">
+                        <span className="text-gray">Ironing:</span>
+                        <span className="font-semibold text-dark">+${(parseFloat(bookingData.estimatedWeight) * 6.60).toFixed(2)}</span>
+                      </div>
+                    )}
                     {bookingData.deliverySpeed === 'same-day' && (
                       <div className="flex justify-between">
                         <span className="text-gray">Same-day Delivery:</span>
@@ -718,7 +1191,15 @@ export default function Booking() {
                     <div className="flex justify-between border-t border-primary pt-2">
                       <span className="font-bold text-dark">Total:</span>
                       <span className="text-xl font-bold text-primary">
-                        ${(parseFloat(bookingData.estimatedWeight) * 3.0 + (bookingData.deliverySpeed === 'same-day' ? 5.0 : 0)).toFixed(2)}
+                        ${(
+                          parseFloat(bookingData.estimatedWeight) * 3.0 +
+                          (bookingData.addOns.hangDry ? parseFloat(bookingData.estimatedWeight) * 3.30 : 0) +
+                          (bookingData.addOns.delicatesCare ? parseFloat(bookingData.estimatedWeight) * 4.40 : 0) +
+                          (bookingData.addOns.comforterService ? 25.0 : 0) +
+                          (bookingData.addOns.stainTreatment * 0.50) +
+                          (bookingData.addOns.ironing ? parseFloat(bookingData.estimatedWeight) * 6.60 : 0) +
+                          (bookingData.deliverySpeed === 'same-day' ? 5.0 : 0)
+                        ).toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -785,7 +1266,12 @@ export default function Booking() {
             className="flex-1 flex items-center justify-center gap-2"
             disabled={isLoading}
           >
-            {currentStep === 4 ? (
+            {isLoading ? (
+              <>
+                <Spinner />
+                Processing...
+              </>
+            ) : currentStep === 4 ? (
               <>
                 Confirm & Pay <CheckCircle size={20} />
               </>

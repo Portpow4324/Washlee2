@@ -5,6 +5,7 @@ import Spinner from '@/components/Spinner'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { 
   Home, Package, Settings, Lock, CreditCard, MapPin, LifeBuoy, 
   Smartphone, Menu, X, LogOut, ChevronRight
@@ -61,9 +62,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="md:hidden bg-white shadow-sm sticky top-0 z-40">
         <div className="flex items-center justify-between px-4 py-4">
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-lg">W</span>
-            </div>
+            <Image
+              src="/logo-washlee.png"
+              alt="Washlee Logo"
+              width={40}
+              height={40}
+              className="rounded-full"
+            />
           </Link>
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
@@ -114,9 +119,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="hidden md:block w-64 bg-white border-r border-gray min-h-screen sticky top-0">
           <div className="p-6">
             <Link href="/" className="flex items-center gap-2 mb-8">
-              <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-lg">W</span>
-              </div>
+              <Image
+                src="/logo-washlee.png"
+                alt="Washlee Logo"
+                width={40}
+                height={40}
+                className="rounded-full"
+              />
               <span className="font-bold text-dark">Washlee</span>
             </Link>
 

@@ -58,11 +58,15 @@ export default function Home() {
                   <span>🛡️</span>
                   <span>Data Protected</span>
                 </div>
+                <div className="flex items-center gap-1.5">
+                  <span>📍</span>
+                  <span>Nationwide Service</span>
+                </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link href="/booking">
-                  <Button size="lg" className="text-white font-bold text-lg">Get Your First Pickup FREE</Button>
+                  <Button size="lg" className="text-white font-bold text-lg">Order Now</Button>
                 </Link>
                 <Link href="/auth/signup">
                   <Button size="lg" variant="outline">Create Free Account</Button>
@@ -70,7 +74,7 @@ export default function Home() {
               </div>
 
               {/* App Store Buttons */}
-              <div className="flex flex-col sm:flex-row gap-4 mt-8">
+              <div className="flex flex-col sm:flex-row gap-4 mt-8 justify-center">
                 <a 
                   href="https://apps.apple.com/app/washlee" 
                   target="_blank" 
@@ -158,7 +162,7 @@ export default function Home() {
           })}
         </div>
 
-        <div className="mt-12 text-center">
+        <div className="mt-12 flex justify-center">
           <Link href="/how-it-works">
             <Button variant="outline">Learn More</Button>
           </Link>
@@ -347,39 +351,23 @@ export default function Home() {
           <h2 className="text-5xl sm:text-6xl font-bold text-white mb-6 leading-tight">
             Ready to Get Started?
           </h2>
-          <p className="text-xl text-black mb-10 opacity-100 max-w-2xl mx-auto font-semibold">
+          <p className="text-xl text-white mb-10 opacity-100 max-w-2xl mx-auto font-semibold">
             Schedule Your First Pickup
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
             <Link href="/booking">
               <Button size="lg" className="bg-primary text-white font-bold hover:shadow-2xl">
-                Get Your Free Pickup Now
-              </Button>
-            </Link>
-            <Link href="/auth/signup">
-              <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10">
-                Learn More
+                Order Now
               </Button>
             </Link>
           </div>
           <div className="flex flex-col sm:flex-row justify-center gap-4 text-white text-sm font-semibold">
-            <span>✓ Free first pickup</span>
             <span>✓ 4.9★ rated</span>
             <span>✓ Cancel anytime</span>
             <span>✓ No card required</span>
           </div>
         </div>
       </section>
-
-      {/* Dashboard Preview Button */}
-      <div className="bg-light py-8 text-center border-t border-gray">
-        <p className="text-gray text-sm mb-4">Want to see the dashboard?</p>
-        <Link href="/dashboard">
-          <Button size="lg" className="bg-primary text-white">
-            View Dashboard Preview →
-          </Button>
-        </Link>
-      </div>
 
       <Footer />
     </>

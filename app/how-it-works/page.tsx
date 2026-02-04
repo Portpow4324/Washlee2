@@ -218,11 +218,13 @@ export default function HowItWorks() {
           <h2 className="text-4xl sm:text-5xl font-bold text-white mb-6">
             Ready to Get Started?
           </h2>
-          <Link href="/auth/signup">
-            <Button size="lg" className="bg-white text-primary hover:bg-light">
-              Schedule Your First Pickup
-            </Button>
-          </Link>
+          <div className="flex justify-center">
+            <Link href="/auth/signup">
+              <Button size="lg" className="bg-white text-primary hover:bg-light">
+                Schedule Your First Pickup
+              </Button>
+            </Link>
+          </div>
         </div>
       </section>
 

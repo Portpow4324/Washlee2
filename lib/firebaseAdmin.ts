@@ -3,15 +3,25 @@ import admin from 'firebase-admin';
 // Initialize primary Firebase Admin SDK
 if (!admin.apps.length) {
   const serviceAccount = {
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    projectId: process.env.FIREBASE_PROJECT_ID || 'washlee-7d3c6',
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL || 'firebase-adminsdk-fbsvc@washlee-7d3c6.iam.gserviceaccount.com',
     privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
   };
 
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
-    databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`,
-  });
+  if (!serviceAccount.privateKey) {
+    console.warn('[Firebase Admin] FIREBASE_PRIVATE_KEY is not set in environment');
+  }
+
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
+      databaseURL: `https://${process.env.FIREBASE_PROJECT_ID || 'washlee-7d3c6'}.firebaseio.com`,
+    });
+  } catch (error: any) {
+    if (!error.message.includes('already exists')) {
+      console.error('[Firebase Admin] Initialization error:', error.message);
+    }
+  }
 }
 
 // Initialize secondary Firebase Admin SDK (lukaverde service account)

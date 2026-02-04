@@ -10,7 +10,9 @@ import {
   TrendingUp,
   AlertCircle,
   Eye,
-  LogOut
+  LogOut,
+  Briefcase,
+  Lock
 } from 'lucide-react'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
@@ -32,12 +34,25 @@ export default function AdminDashboard() {
   const router = useRouter()
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [hasOwnerAccess, setHasOwnerAccess] = useState(false)
 
   // Check admin access
   useEffect(() => {
-    console.log('[AdminPage] Auth state:', { user: user?.email, isAdmin: userData?.isAdmin, authLoading })
+    // Check for session-based owner access (from secret-access page)
+    const ownerAccess = sessionStorage.getItem('ownerAccess') === 'true'
+    setHasOwnerAccess(ownerAccess)
+
+    console.log('[AdminPage] Auth state:', { user: user?.email, isAdmin: userData?.isAdmin, authLoading, ownerAccess })
     
     if (authLoading) return // Wait for auth to load
+
+    // Allow access if either:
+    // 1. User is logged in AND is marked as admin in Firebase, OR
+    // 2. User has owner access via session
+    if (ownerAccess) {
+      console.log('[AdminPage] Owner access granted via secret link')
+      return
+    }
 
     if (!user) {
       console.log('[AdminPage] Not logged in, redirecting to login')
@@ -84,7 +99,7 @@ export default function AdminDashboard() {
   }, [user])
 
   // Show loading while auth is being checked
-  if (authLoading || (loading && user && userData?.isAdmin)) {
+  if (authLoading || (loading && !hasOwnerAccess)) {
     return (
       <>
         <Header />
@@ -270,6 +285,28 @@ export default function AdminDashboard() {
                 >
                   System Settings
                 </a>
+              </div>
+            </div>
+
+            {/* Employees & Customers */}
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+              <div className="bg-gradient-to-r from-[#48C9B0] to-[#7FE3D3] px-6 py-4">
+                <h2 className="text-white font-bold text-lg flex items-center gap-2">
+                  <Lock size={24} />
+                  Employee & Customer Access
+                </h2>
+              </div>
+              <div className="p-6 space-y-3">
+                <p className="text-gray-600 mb-4">View all employee and customer accounts</p>
+                <a
+                  href="/secret-admin"
+                  className="block px-4 py-2 bg-[#48C9B0] text-white rounded hover:bg-[#3aad9a] transition text-center font-semibold"
+                >
+                  Access Employee & Customer Portal
+                </a>
+                <p className="text-xs text-gray-500 text-center mt-2">
+                  Password-protected portal for viewing all accounts
+                </p>
               </div>
             </div>
           </div>

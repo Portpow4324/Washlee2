@@ -5,6 +5,7 @@ import Footer from '@/components/Footer'
 import Button from '@/components/Button'
 import Card from '@/components/Card'
 import Link from 'next/link'
+import Image from 'next/image'
 import { CheckCircle, TrendingUp, Clock, Star } from 'lucide-react'
 import { useState } from 'react'
 
@@ -45,17 +46,23 @@ export default function BecomePro() {
               <p className="text-xl text-gray mb-8">
                 Become a Washlee Pro and earn flexible income by providing professional laundry services to your community.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link href="/auth/signup?type=pro">
                   <Button size="lg">Apply Now</Button>
                 </Link>
-                <a href="#learn-more" className="flex items-center gap-2 px-6 py-3 text-primary font-semibold">
+                <a href="#learn-more" className="flex items-center justify-center gap-2 px-6 py-3 text-primary font-semibold">
                   Learn More ↓
                 </a>
               </div>
             </div>
-            <div className="bg-accent rounded-2xl h-96 flex items-center justify-center text-6xl">
-              💼
+            <div className="rounded-2xl h-96 overflow-hidden shadow-lg">
+              <Image
+                src="/pro-hero.jpg"
+                alt="Washlee Pro"
+                width={500}
+                height={400}
+                className="w-full h-full object-cover"
+              />
             </div>
           </div>
         </div>
@@ -155,8 +162,8 @@ export default function BecomePro() {
       </section>
 
       {/* Earnings */}
-      <section className="section bg-gradient-to-br from-indigo-600 via-purple-500 to-pink-500">
-        <h2 className="text-4xl font-bold text-white mb-12 text-center">Sample Earnings</h2>
+      <section className="section bg-light">
+        <h2 className="text-4xl font-bold text-dark mb-12 text-center">Sample Earnings</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
           {[
@@ -186,40 +193,40 @@ export default function BecomePro() {
             <div
               key={i}
               onClick={(e) => handleCardClick(i, e)}
-              className={`rounded-xl p-8 relative transition-all duration-300 ease-in-out cursor-pointer hover:bg-white hover:text-dark hover:shadow-2xl ${
+              className={`rounded-xl p-8 relative transition-all duration-300 ease-in-out cursor-pointer border-2 ${
                 activeCard === i
-                  ? 'bg-white bg-opacity-30 text-dark shadow-2xl border-4 border-white scale-105'
+                  ? 'bg-white text-dark shadow-2xl border-primary scale-105'
                   : tier.highlight
-                  ? 'bg-white bg-opacity-20 text-white shadow-xl scale-105 border-2 border-white border-opacity-40'
-                  : 'bg-white bg-opacity-15 text-white backdrop-blur-sm'
+                  ? 'bg-accent text-dark shadow-lg border-primary scale-105'
+                  : 'bg-white text-dark border-gray/20 hover:border-primary hover:shadow-lg'
               }`}
             >
               {tier.badge && (
                 <span className={`text-xs font-bold px-3 py-1 rounded-full mb-3 inline-block ${
                   tier.highlight
-                    ? 'bg-pink-400 text-white'
-                    : 'bg-white bg-opacity-30 text-white'
+                    ? 'bg-primary text-white'
+                    : 'bg-primary/10 text-primary'
                 }`}>
                   {tier.badge}
                 </span>
               )}
-              <h3 className="text-2xl font-bold mb-4">{tier.title}</h3>
+              <h3 className="text-2xl font-bold mb-4 text-dark">{tier.title}</h3>
               <div className="space-y-4 mb-6">
                 <div>
-                  <p className="text-sm opacity-75 mb-1">Hours Per Week</p>
-                  <p className="text-2xl font-bold">{tier.hours}</p>
+                  <p className="text-sm text-gray mb-1">Hours Per Week</p>
+                  <p className="text-2xl font-bold text-dark">{tier.hours}</p>
                 </div>
                 <div>
-                  <p className="text-sm opacity-75 mb-1">Weekly Earnings</p>
-                  <p className="text-2xl font-bold">{tier.earnings}</p>
+                  <p className="text-sm text-gray mb-1">Weekly Earnings</p>
+                  <p className="text-2xl font-bold text-primary">{tier.earnings}</p>
                 </div>
                 <div>
-                  <p className="text-sm opacity-75 mb-1">Annual Potential</p>
-                  <p className="text-3xl font-bold">{tier.annual}</p>
+                  <p className="text-sm text-gray mb-1">Annual Potential</p>
+                  <p className="text-3xl font-bold text-dark">{tier.annual}</p>
                 </div>
               </div>
               <Link href="/auth/signup?type=pro" className="block">
-                <Button size="lg" className={`w-full bg-primary text-white transition-all hover:bg-white hover:!text-dark`}>Apply Now</Button>
+                <Button size="lg" className={`w-full`}>Apply Now</Button>
               </Link>
             </div>
           ))}
@@ -248,80 +255,6 @@ export default function BecomePro() {
               ))}
             </ul>
           </Card>
-        </div>
-      </section>
-
-      {/* Application Form */}
-      <section className="section bg-light" id="apply">
-        <h2 className="text-4xl font-bold text-dark mb-12 text-center">Apply to Become a Washlee Pro</h2>
-
-        <div className="max-w-2xl mx-auto bg-white rounded-xl p-8">
-          <form className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input
-                type="text"
-                placeholder="First Name"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <input
-                type="email"
-                placeholder="Email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-
-            <input
-              type="tel"
-              placeholder="Phone Number"
-              name="phone"
-              value={formData.phone}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-
-            <select
-              name="city"
-              value={formData.city}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="">Select Your State</option>
-              <option>New South Wales (NSW)</option>
-              <option>Victoria (VIC)</option>
-              <option>Queensland (QLD)</option>
-              <option>Western Australia (WA)</option>
-              <option>South Australia (SA)</option>
-              <option>Tasmania (TAS)</option>
-              <option>Australian Capital Territory (ACT)</option>
-              <option>Northern Territory (NT)</option>
-              <option>Other</option>
-            </select>
-
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="terms"
-                className="w-4 h-4 rounded border-gray"
-              />
-              <label htmlFor="terms" className="text-sm text-gray">
-                I agree to the Terms & Conditions and Privacy Policy
-              </label>
-            </div>
-
-            <Button size="lg" className="w-full">
-              Submit Application
-            </Button>
-
-            <p className="text-center text-sm text-gray">
-              Typical response time: 24-48 hours
-            </p>
-          </form>
         </div>
       </section>
 

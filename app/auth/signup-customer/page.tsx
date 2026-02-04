@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
 import { setDoc, doc } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
+import { createCustomerProfile } from '@/lib/userManagement'
 
 export default function SignupCustomer() {
   const [currentStep, setCurrentStep] = useState(0)
@@ -356,7 +357,7 @@ export default function SignupCustomer() {
         formData.password
       )
 
-      // Create Firestore user document
+      // Update user profile in users collection with full name
       await setDoc(doc(db, 'users', userCredential.user.uid), {
         uid: userCredential.user.uid,
         email: formData.email,
@@ -364,19 +365,29 @@ export default function SignupCustomer() {
         firstName: formData.firstName,
         lastName: formData.lastName,
         phone: formData.phone || '',
-        personalUse: formData.personalUse,
-        ageOver65: formData.ageOver65,
+        createdAt: new Date().toISOString(),
+        userType: 'customer',
         marketingTexts: formData.marketingTexts,
         accountTexts: formData.accountTexts,
+      }, { merge: true })
+
+      // Create customer profile in new system
+      await createCustomerProfile(userCredential.user.uid, {
+        email: formData.email,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone || '',
+        personalUse: formData.personalUse as 'personal' | 'business',
+        ageOver65: formData.ageOver65,
+        preferenceMarketingTexts: formData.marketingTexts,
+        preferenceAccountTexts: formData.accountTexts,
         selectedPlan: formData.selectedPlan,
-        userType: 'customer',
-        createdAt: new Date().toISOString(),
-        profileComplete: true,
+        status: 'active',
       })
 
-      // Redirect to dashboard
+      // Redirect to home (dashboard will load orders with proper error handling)
       setTimeout(() => {
-        router.push('/dashboard/customer')
+        router.push('/')
       }, 1500)
     } catch (err: any) {
       console.error('Signup error:', err)
@@ -402,7 +413,10 @@ export default function SignupCustomer() {
             </div>
             <h1 className="text-3xl font-bold text-dark mb-3">Account Created!</h1>
             <p className="text-gray mb-6">Welcome to Washlee. Your account is all set up.</p>
-            <p className="text-sm text-gray">Redirecting to your dashboard...</p>
+            <p className="text-sm text-gray mb-8">Redirecting you home...</p>
+            <Link href="/" className="inline-block px-6 py-2 bg-primary text-white rounded-lg hover:shadow-lg transition font-semibold">
+              Go to Home
+            </Link>
           </div>
         </div>
       </div>

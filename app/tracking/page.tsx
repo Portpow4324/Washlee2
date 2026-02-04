@@ -48,10 +48,10 @@ function TrackingContent() {
       <>
         <Header />
         <div className="min-h-screen bg-light flex items-center justify-center">
-          <div className="text-center">
-            <div className="inline-block px-6 py-3 bg-primary text-white rounded-lg">
-              Loading tracking information...
-            </div>
+          <div className="text-center bg-white p-8 rounded-lg shadow-lg">
+            <Spinner />
+            <p className="mt-4 text-dark font-semibold">Loading tracking information...</p>
+            <p className="mt-2 text-sm text-gray">Please wait while we fetch your order status</p>
           </div>
         </div>
         <Footer />

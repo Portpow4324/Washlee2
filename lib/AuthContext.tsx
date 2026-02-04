@@ -3,12 +3,14 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react'
 import { auth, db } from '@/lib/firebase'
 import { onAuthStateChanged, User } from 'firebase/auth'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
 
 interface UserData {
   uid: string
   email: string
   name: string
+  firstName?: string
+  lastName?: string
   phone?: string
   address?: string
   city?: string
@@ -81,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             if (userSnap.exists()) {
               const userData = userSnap.data() as UserData
-              console.log('[Auth] User data loaded:', userData.name)
+              console.log('[Auth] User data loaded:', { name: userData.name, firstName: userData.firstName, lastName: userData.lastName })
               
               // Use custom claims if available, fallback to Firestore
               const finalUserData = {
@@ -93,24 +95,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUserData(finalUserData)
               setLoading(false) // Only set loading=false when userData is ready
             } else {
-              console.log('[Auth] No user document found in Firestore')
-              // Still set userData if they have admin claims
-              if (isAdminFromClaims) {
-                setUserData({
-                  uid: firebaseUser.uid,
-                  email: firebaseUser.email || '',
-                  name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Admin',
-                  createdAt: new Date().toISOString(),
-                  userType: 'customer',
-                  isAdmin: true,
-                })
-              } else {
-                setUserData(null)
+              console.log('[Auth] No user document found - creating one for:', firebaseUser.email)
+              
+              // AUTO-CREATE user document for new users
+              const newUserData: UserData = {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email || '',
+                name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Customer',
+                phone: firebaseUser.phoneNumber || '',
+                createdAt: new Date().toISOString(),
+                userType: 'customer',
+                isAdmin: isAdminFromClaims,
+                marketingTexts: true,
+                accountTexts: true,
+              }
+
+              try {
+                // Create the user document in Firestore
+                const userRef = doc(db, 'users', firebaseUser.uid)
+                await setDoc(userRef, newUserData)
+                console.log('[Auth] User document created successfully')
+                
+                setUserData(newUserData)
+              } catch (createError) {
+                console.error('[Auth] Failed to create user document:', createError)
+                // Still proceed without the document (will fail on payments, but allows browsing)
+                if (isAdminFromClaims) {
+                  setUserData(newUserData)
+                } else {
+                  setUserData(null)
+                }
               }
               setLoading(false)
             }
           } catch (error) {
-            console.error('[Auth] Error fetching user data:', error)
+            console.error('[Auth] Error fetching/creating user data:', error)
             // If Firestore fails but user has admin claims, still allow access
             if (isAdminFromClaims) {
               setUserData({

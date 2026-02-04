@@ -1594,7 +1594,7 @@ loyalty_members/{customerId}
 - Subscription Management
 
 ### **Weeks 7-8: Phase 2B - Engagement**
-- Admin Dashboard (core)
+- Dashboard (core)Admin 
 - Loyalty Program
 - Customer Support System
 

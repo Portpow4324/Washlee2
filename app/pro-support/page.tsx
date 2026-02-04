@@ -284,9 +284,11 @@ export default function ProSupport() {
             <p className="text-gray mb-8 max-w-2xl mx-auto">
               Join thousands of Washlee Pros earning flexible income on their own schedule.
             </p>
-            <Link href="/pro">
-              <Button size="lg" className="text-white">Become a Washlee Pro</Button>
-            </Link>
+            <div className="flex justify-center">
+              <Link href="/pro">
+                <Button size="lg" className="text-white">Become a Washlee Pro</Button>
+              </Link>
+            </div>
           </div>
         </section>
       </main>

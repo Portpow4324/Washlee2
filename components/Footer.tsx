@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { Facebook, Twitter, Instagram, Mail } from 'lucide-react'
 
@@ -7,9 +8,16 @@ export default function Footer() {
   return (
     <footer className="bg-dark text-white mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-8 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-6 mb-8">
           {/* Brand */}
           <div>
+            <Image
+              src="/logo-washlee.png"
+              alt="Washlee Logo"
+              width={80}
+              height={80}
+              className="rounded-full mb-2"
+            />
             <h3 className="font-bold text-lg mb-4">Washlee</h3>
             <p className="text-gray text-sm">
               On-demand laundry service that picks up, cleans, and delivers your clothes. Life's too short for laundry.
@@ -26,6 +34,11 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/services" className="hover:text-primary transition">
+                  Services
+                </Link>
+              </li>
+              <li>
                 <Link href="/pricing" className="hover:text-primary transition">
                   Pricing
                 </Link>
@@ -33,11 +46,6 @@ export default function Footer() {
               <li>
                 <Link href="/faq" className="hover:text-primary transition">
                   FAQ
-                </Link>
-              </li>
-              <li>
-                <Link href="/loyalty" className="hover:text-primary transition">
-                  WASH Club
                 </Link>
               </li>
               <li>
@@ -75,6 +83,38 @@ export default function Footer() {
             </ul>
           </div>
 
+          {/* Resources */}
+          <div>
+            <h3 className="font-bold mb-4">Resources</h3>
+            <ul className="space-y-2 text-sm text-gray">
+              <li>
+                <Link href="/gift-cards" className="hover:text-primary transition">
+                  Gift Cards
+                </Link>
+              </li>
+              <li>
+                <Link href="/corporate" className="hover:text-primary transition">
+                  Corporate Services
+                </Link>
+              </li>
+              <li>
+                <Link href="/care-guide" className="hover:text-primary transition">
+                  Fabric Care Guide
+                </Link>
+              </li>
+              <li>
+                <Link href="/damage-protection" className="hover:text-primary transition">
+                  Protection Guarantee
+                </Link>
+              </li>
+              <li>
+                <Link href="/referrals" className="hover:text-primary transition">
+                  Referral Program
+                </Link>
+              </li>
+            </ul>
+          </div>
+
           {/* Support */}
           <div>
             <h3 className="font-bold mb-4">Support</h3>
@@ -90,9 +130,9 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <a href="#" className="hover:text-primary transition">
-                  Status
-                </a>
+                <Link href="/security" className="hover:text-primary transition">
+                  Security
+                </Link>
               </li>
             </ul>
           </div>

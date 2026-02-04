@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { useState } from 'react'
@@ -44,32 +45,39 @@ export default function Header() {
               </button>
             )}
             <Link href="/" className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-lg">W</span>
-              </div>
+              <Image
+                src="/logo-washlee.png"
+                alt="Washlee Logo"
+                width={80}
+                height={80}
+                className="rounded-full"
+              />
               <span className="font-bold text-xl text-dark hidden sm:inline">Washlee</span>
             </Link>
           </div>
 
           {/* Desktop Menu */}
-          <div className="hidden md:flex items-center gap-2">
-            <Link href="/" className="px-4 py-2 text-primary hover:bg-mint rounded-full transition font-semibold">
+          <div className="hidden md:flex items-center gap-1">
+            <Link href="/" className="px-3 py-2 text-base text-primary hover:bg-mint rounded-full transition font-semibold">
               Home
             </Link>
-            <Link href="/how-it-works" className="px-4 py-2 text-primary hover:bg-mint rounded-full transition font-semibold">
+            <Link href="/how-it-works" className="px-3 py-2 text-base text-primary hover:bg-mint rounded-full transition font-semibold">
               How It Works
             </Link>
-            <Link href="/pricing" className="px-4 py-2 text-primary hover:bg-mint rounded-full transition font-semibold">
+            <Link href="/pricing" className="px-3 py-2 text-base text-primary hover:bg-mint rounded-full transition font-semibold">
               Pricing
             </Link>
-            <Link href="/faq" className="px-4 py-2 text-primary hover:bg-mint rounded-full transition font-semibold">
+            <Link href="/faq" className="px-3 py-2 text-base text-primary hover:bg-mint rounded-full transition font-semibold">
               FAQ
             </Link>
-            <Link href="/loyalty" className="px-4 py-2 text-primary hover:bg-mint rounded-full transition font-semibold">
+            <Link href="/loyalty" className="px-3 py-2 text-base text-primary hover:bg-mint rounded-full transition font-semibold">
               WASH Club
             </Link>
-            <Link href="/pro" className="px-4 py-2 text-primary hover:bg-mint rounded-full transition font-semibold">
+            <Link href="/pro" className="px-3 py-2 text-base text-primary hover:bg-mint rounded-full transition font-semibold">
               Become a Pro
+            </Link>
+            <Link href="/app-info" className="px-3 py-2 text-base text-primary hover:bg-mint rounded-full transition font-semibold">
+              App Info
             </Link>
           </div>
 
@@ -90,7 +98,9 @@ export default function Header() {
                     <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white">
                       <User size={16} />
                     </div>
-                    <span className="text-dark">{userData?.name?.split(' ')[0] || 'User'}</span>
+                    <span className="text-dark">
+                      {loading ? '...' : userData?.name?.split(' ')[0] || 'User'}
+                    </span>
                   </button>
 
                   {/* User Menu Dropdown */}
@@ -118,21 +128,7 @@ export default function Header() {
                           Pro Dashboard
                         </Link>
                       )}
-                      {userData?.isAdmin && (
-                        <>
-                          <div className="px-4 py-2 bg-gray-100 text-xs font-bold text-primary border-b border-gray/20">
-                            ADMIN PANEL
-                          </div>
-                          <Link
-                            href="/admin"
-                            className="block w-full px-4 py-3 text-dark hover:bg-red-50 transition font-semibold border-b border-gray/20 flex items-center gap-2"
-                            onClick={() => setShowUserMenu(false)}
-                          >
-                            <Shield size={18} className="text-red-600" />
-                            Admin Dashboard
-                          </Link>
-                        </>
-                      )}
+                      {/* Admin access removed from UI - admins can access directly via /admin route */}
                       <button
                         onClick={handleLogout}
                         className="w-full text-left px-4 py-3 text-red-600 hover:bg-red-50 transition flex items-center gap-2 font-semibold"
@@ -146,23 +142,16 @@ export default function Header() {
               </>
             ) : (
               <>
+                {/* Sign In Button */}
                 <Link
-                  href="/auth/admin-login"
-                  className="px-5 py-2.5 text-white border-2 border-primary rounded-full hover:shadow-lg transition font-semibold text-sm bg-primary/80 hover:bg-primary flex items-center gap-2"
-                  title="Admin Login"
-                >
-                  <Shield size={16} />
-                  Admin
-                </Link>
-                <Link
-                  href="/auth/login"
-                  className="px-5 py-2.5 text-white border-2 border-primary rounded-full hover:shadow-lg transition font-semibold text-lg bg-primary"
+                  href="/auth/signin"
+                  className="px-6 py-3 text-dark bg-white rounded-full shadow-md hover:shadow-lg transition font-semibold text-lg"
                 >
                   Sign In
                 </Link>
                 <Link
                   href="/auth/signup"
-                  className="px-6 py-2.5 bg-primary text-white rounded-full hover:shadow-lg transition font-bold text-lg"
+                  className="px-5 py-2.5 bg-primary text-white rounded-full hover:shadow-lg transition font-bold text-base"
                 >
                   Get Started
                 </Link>
@@ -199,6 +188,9 @@ export default function Header() {
             </Link>
             <Link href="/pro" className="block px-4 py-2 text-primary hover:bg-mint rounded-full transition font-semibold">
               Become a Pro
+            </Link>
+            <Link href="/app-info" className="block px-4 py-2 text-primary hover:bg-mint rounded-full transition font-semibold">
+              App Info
             </Link>
             <hr className="my-2" />
             {isAuthenticated && !loading ? (
@@ -260,11 +252,7 @@ export default function Header() {
               </>
             ) : (
               <>
-                <Link href="/auth/admin-login" className="block px-4 py-2 text-white bg-primary/80 hover:bg-primary rounded-full transition font-semibold flex items-center gap-2">
-                  <Shield size={16} />
-                  Admin Login
-                </Link>
-                <Link href="/auth/login" className="block px-4 py-2 text-white bg-primary rounded-full transition font-semibold">
+                <Link href="/auth/signin" className="block px-4 py-2 text-white bg-primary rounded-full transition font-semibold">
                   Sign In
                 </Link>
                 <Link href="/auth/signup" className="block px-4 py-2 bg-primary text-white rounded-full font-bold">

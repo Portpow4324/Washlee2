@@ -20,7 +20,7 @@ export default function Button({
   className = '',
   ...props
 }: ButtonProps) {
-  const baseClasses = 'font-semibold transition rounded-full cursor-pointer border-none shadow-md hover:shadow-xl'
+  const baseClasses = 'font-semibold transition rounded-full cursor-pointer border-none shadow-md hover:shadow-xl min-h-[48px] flex items-center justify-center'
   
   const variantClasses = {
     primary: 'bg-primary text-white hover:bg-accent hover:shadow-xl',

@@ -30,13 +30,16 @@ export interface PaymentMethod {
   isDefault: boolean
 }
 
-// Create Stripe customer
+// Create Stripe customer with retry logic for rate limits
 export async function createStripeCustomer(
   customerId: string,
   email: string,
-  name: string
+  name: string,
+  retries = 3
 ): Promise<string> {
   try {
+    console.log('[PaymentService] Creating Stripe customer for:', customerId)
+    
     const customer = await stripe.customers.create({
       email,
       name,
@@ -45,15 +48,26 @@ export async function createStripeCustomer(
       }
     })
 
+    console.log('[PaymentService] Stripe customer created successfully:', customer.id)
+
     // Save Stripe customer ID to Firestore
     const userRef = doc(db, 'users', customerId)
     await updateDoc(userRef, {
       stripeCustomerId: customer.id
     })
 
+    console.log('[PaymentService] Stripe customer ID saved to Firestore')
     return customer.id
-  } catch (error) {
-    console.error('Error creating Stripe customer:', error)
+  } catch (error: any) {
+    // Handle rate limiting (429 error) with exponential backoff
+    if (error?.status === 429 && retries > 0) {
+      const delay = Math.pow(2, 4 - retries) * 1000 // Exponential backoff: 1s, 2s, 4s
+      console.warn(`[PaymentService] Rate limited. Retrying in ${delay}ms (${retries} retries left)`)
+      await new Promise(resolve => setTimeout(resolve, delay))
+      return createStripeCustomer(customerId, email, name, retries - 1)
+    }
+    
+    console.error('[PaymentService] Error creating Stripe customer:', error?.message || error)
     throw error
   }
 }
@@ -66,20 +80,27 @@ export async function createPaymentIntent(
   description?: string
 ): Promise<{ clientSecret: string; paymentIntentId: string }> {
   try {
+    console.log('[Payment] Creating payment intent for:', { customerId, amount, orderId })
+    
     // Get Stripe customer ID
     const userRef = doc(db, 'users', customerId)
     const userSnap = await getDoc(userRef)
     
     if (!userSnap.exists()) {
-      throw new Error('User not found')
+      console.error('[Payment] User not found in Firestore:', customerId)
+      throw new Error('User not found in Firestore')
     }
 
     const stripeCustomerId = userSnap.data().stripeCustomerId
+    console.log('[Payment] Retrieved stripeCustomerId:', stripeCustomerId)
+    
     if (!stripeCustomerId) {
-      throw new Error('Stripe customer not set up')
+      console.error('[Payment] Stripe customer not set up. User data:', userSnap.data())
+      throw new Error('Stripe customer not set up - run createStripeCustomer() first')
     }
 
     // Create payment intent
+    console.log('[Payment] Calling Stripe API to create payment intent')
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency: 'aud',
@@ -89,6 +110,12 @@ export async function createPaymentIntent(
         orderId,
         firebaseUid: customerId
       }
+    })
+
+    console.log('[Payment] Payment intent created:', {
+      id: paymentIntent.id,
+      status: paymentIntent.status,
+      clientSecret: paymentIntent.client_secret ? 'present' : 'missing'
     })
 
     // Save to Firestore
@@ -108,7 +135,8 @@ export async function createPaymentIntent(
       paymentIntentId: paymentIntent.id
     }
   } catch (error) {
-    console.error('Error creating payment intent:', error)
+    const errorMsg = error instanceof Error ? error.message : JSON.stringify(error)
+    console.error('[Payment] Error creating payment intent:', errorMsg, error)
     throw error
   }
 }

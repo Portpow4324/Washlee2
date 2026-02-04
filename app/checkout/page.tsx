@@ -109,6 +109,10 @@ function CheckoutContent() {
   function handlePaymentSuccess(newPaymentIntentId: string) {
     setPaymentIntentId(newPaymentIntentId)
     setStep('confirmation')
+    // Auto-redirect to tracking after 3 seconds
+    setTimeout(() => {
+      router.push(`/tracking?orderId=${orderId}`)
+    }, 3000)
   }
 
   function handlePaymentError(errorMessage: string) {
@@ -132,6 +136,23 @@ function CheckoutContent() {
       <Header />
       <div className="min-h-screen bg-gradient-to-b from-[#E8FFFB] to-white py-12 px-4">
         <div className="max-w-2xl mx-auto">
+          {/* Back Button */}
+          {step !== 'confirmation' && (
+            <button
+              onClick={() => {
+                if (step === 'payment') {
+                  setStep('method')
+                  setClientSecret('')
+                } else {
+                  router.push('/booking')
+                }
+              }}
+              className="mb-6 text-primary hover:text-[#3aad9a] font-semibold flex items-center gap-2"
+            >
+              ← Back to Order
+            </button>
+          )}
+
           {/* Progress Steps */}
           <div className="flex justify-between items-center mb-12">
             {(['method', 'payment', 'confirmation'] as const).map((s, i) => (
@@ -209,6 +230,26 @@ function CheckoutContent() {
                 <strong>Order ID:</strong> {orderId}
               </p>
             </div>
+
+            {/* Payment Security Badges */}
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-xs text-blue-900 font-semibold mb-3">Your payment is secure and encrypted:</p>
+              <div className="flex flex-wrap gap-3">
+                <div className="flex items-center gap-1.5 text-xs text-blue-800">
+                  <span>🔒</span>
+                  <span>PCI DSS Level 1</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-blue-800">
+                  <span>✓</span>
+                  <span>SSL Encrypted</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-blue-800">
+                  <span>💳</span>
+                  <span>Stripe Verified</span>
+                </div>
+              </div>
+              <p className="text-xs text-blue-700 mt-3">We never store your card details. Stripe handles all payment processing securely.</p>
+            </div>
           </div>
 
           {/* Payment Method Selection */}
@@ -250,14 +291,16 @@ function CheckoutContent() {
 
               <button
                 onClick={createPaymentIntent}
-                disabled={isLoading}
+                disabled={isLoading || orderSummary.total < 24}
                 className={`w-full py-3 px-4 rounded-lg font-semibold text-white transition-all ${
-                  isLoading
+                  isLoading || orderSummary.total < 24
                     ? 'bg-gray-400 cursor-not-allowed'
                     : 'bg-[#48C9B0] hover:bg-[#3aad9a] active:scale-95'
                 }`}
               >
-                {isLoading ? (
+                {orderSummary.total < 24 ? (
+                  `Minimum purchase $24 (Current: $${orderSummary.total.toFixed(2)})`
+                ) : isLoading ? (
                   <div className="flex items-center justify-center gap-2">
                     <Spinner />
                     Preparing Payment...

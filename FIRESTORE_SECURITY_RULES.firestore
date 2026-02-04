@@ -1,0 +1,190 @@
+/**
+ * Firestore Security Rules for Washlee User Management
+ * 
+ * Copy this to your Firebase Console under Rules tab
+ * 
+ * Architecture:
+ * - employees/{uid} - Employee/Pro profiles (isolated)
+ * - customers/{uid} - Customer profiles (isolated)
+ * - users/{uid} - User metadata (role mappings)
+ * 
+ * Security:
+ * - Users can only access their own profiles
+ * - Admins have override access
+ * - No cross-user data leakage
+ */
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================
+    // EMPLOYEE COLLECTION
+    // ============================================
+    match /employees/{uid} {
+      // User can read/write their own profile
+      allow read, write: if request.auth.uid == uid && request.auth != null;
+      
+      // Admins can read all employee profiles
+      allow read: if request.auth.token.admin == true;
+      
+      // Admins can update employee profiles (for management)
+      allow write: if request.auth.token.admin == true;
+    }
+    
+    // ============================================
+    // CUSTOMERS COLLECTION
+    // ============================================
+    match /customers/{uid} {
+      // User can read/write their own profile
+      allow read, write: if request.auth.uid == uid && request.auth != null;
+      
+      // Admins can read all customer profiles
+      allow read: if request.auth.token.admin == true;
+      
+      // Admins can update customer profiles (for management)
+      allow write: if request.auth.token.admin == true;
+    }
+    
+    // ============================================
+    // USERS METADATA COLLECTION
+    // ============================================
+    match /users/{uid} {
+      // User can read their own metadata
+      allow read: if request.auth.uid == uid && request.auth != null;
+      
+      // User can write to their own metadata (limited fields)
+      allow write: if request.auth.uid == uid 
+        && request.auth != null
+        && request.resource.data.size() < 20; // Prevent overwriting entire doc
+      
+      // Admins can read all user metadata
+      allow read: if request.auth.token.admin == true;
+      
+      // Admins can write user metadata (for management)
+      allow write: if request.auth.token.admin == true;
+    }
+    
+    // ============================================
+    // ADMIN COLLECTION (if needed)
+    // ============================================
+    match /admin/{document=**} {
+      allow read, write: if request.auth.token.admin == true;
+    }
+    
+    // ============================================
+    // DEFAULT DENY (Security Best Practice)
+    // ============================================
+    // Any other collection defaults to deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+/**
+ * HOW TO SET CUSTOM CLAIMS FOR ADMINS
+ * 
+ * Option 1: Firebase Console
+ * 1. Go to Firebase Console > Authentication > Users
+ * 2. Click on user
+ * 3. Click "Custom claims" (at bottom)
+ * 4. Add: { "admin": true }
+ * 5. Click Update
+ * 
+ * Option 2: Firebase Admin SDK (Node.js)
+ * 
+ * const admin = require('firebase-admin');
+ * 
+ * admin.auth().setCustomUserClaims(uid, { admin: true })
+ *   .then(() => console.log('Custom claims set'))
+ *   .catch(error => console.log(error));
+ * 
+ * Option 3: Via API Endpoint
+ * 
+ * // In your Node.js backend
+ * app.post('/api/admin/set-admin', async (req, res) => {
+ *   try {
+ *     const { uid } = req.body;
+ *     await admin.auth().setCustomUserClaims(uid, { admin: true });
+ *     res.json({ success: true });
+ *   } catch (error) {
+ *     res.status(500).json({ error: error.message });
+ *   }
+ * });
+ */
+
+/**
+ * TESTING THESE RULES
+ * 
+ * Test 1: User reads own employee profile
+ * Expected: ✅ ALLOW
+ * Condition: request.auth.uid == uid
+ * 
+ * Test 2: User reads another user's employee profile
+ * Expected: ❌ DENY
+ * Condition: request.auth.uid != uid (DENY)
+ * 
+ * Test 3: Admin reads any employee profile
+ * Expected: ✅ ALLOW
+ * Condition: request.auth.token.admin == true
+ * 
+ * Test 4: Unauthenticated user reads profile
+ * Expected: ❌ DENY
+ * Condition: request.auth == null (DENY)
+ * 
+ * Test 5: User reads own customer profile
+ * Expected: ✅ ALLOW
+ * Condition: request.auth.uid == uid
+ * 
+ * Test 6: User modifies own user metadata
+ * Expected: ✅ ALLOW (with size limits)
+ * Condition: request.auth.uid == uid && size < 20
+ * 
+ * Test 7: User modifies another user's metadata
+ * Expected: ❌ DENY
+ * Condition: request.auth.uid != uid (DENY)
+ */
+
+/**
+ * DEPLOYMENT CHECKLIST
+ * 
+ * Before going to production:
+ * 
+ * ☐ Copy these rules to Firebase Console
+ * ☐ Test rules in Rules Simulator
+ * ☐ Set admin claims for admin users
+ * ☐ Verify employees collection is accessible
+ * ☐ Verify customers collection is accessible
+ * ☐ Verify users collection is accessible
+ * ☐ Test user isolation (can't read other users)
+ * ☐ Test admin override (can read all)
+ * ☐ Test cross-collection access (should be denied)
+ * ☐ Monitor error rates after deployment
+ * ☐ Update API endpoints to match new structure
+ * ☐ Update dashboard queries to use correct collections
+ */
+
+/**
+ * FIRESTORE INDEXES (If Needed)
+ * 
+ * For queries like "get all active employees":
+ * 
+ * Collection: employees
+ * Fields:
+ *   - status (Ascending)
+ *   - createdAt (Descending)
+ * 
+ * Collection: customers
+ * Fields:
+ *   - status (Ascending)
+ *   - createdAt (Descending)
+ * 
+ * Collection: users
+ * Fields:
+ *   - userTypes (Ascending)
+ *   - primaryUserType (Ascending)
+ * 
+ * Note: Single-field indexes are created automatically
+ */

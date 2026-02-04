@@ -1,16 +1,21 @@
 'use client'
 
+import Image from 'next/image'
 import Button from '@/components/Button'
 import Spinner from '@/components/Spinner'
 import Link from 'next/link'
 import { useState } from 'react'
 import { Mail, Lock, Eye, EyeOff, ArrowLeft, CheckCircle } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth'
 import { auth, db } from '@/lib/firebase'
 import { doc, getDoc } from 'firebase/firestore'
 
 export default function Login() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams?.get('redirect')
+  
   const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -21,7 +26,6 @@ export default function Login() {
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [resetSuccessMessage, setResetSuccessMessage] = useState('')
-  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -36,9 +40,13 @@ export default function Login() {
       // Show success message
       setSuccessMessage(`✅ Welcome back! Logging you in...`)
 
-      // Redirect to home
+      // Redirect to specified location or home
       setTimeout(() => {
-        router.push('/')
+        if (redirectTo) {
+          router.push(redirectTo)
+        } else {
+          router.push('/')
+        }
       }, 1500)
     } catch (err: any) {
       console.error('Login error:', err)
@@ -109,9 +117,13 @@ export default function Login() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-8">
-            <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-xl">W</span>
-            </div>
+            <Image
+              src="/logo-washlee.png"
+              alt="Washlee Logo"
+              width={48}
+              height={48}
+              className="rounded-full"
+            />
             <span className="font-bold text-2xl text-dark">Washlee</span>
           </Link>
           <h1 className="text-3xl font-bold text-dark">Sign In</h1>

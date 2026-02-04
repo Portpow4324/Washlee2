@@ -86,7 +86,7 @@ export default function Loyalty() {
               </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/auth/signup">
                 <Button size="lg" className="bg-primary text-white">
                   Join WASH Club Now

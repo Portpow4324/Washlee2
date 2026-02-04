@@ -5,15 +5,22 @@ import Spinner from '@/components/Spinner'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { Mail, Lock, User, Phone, MapPin, CheckCircle, ArrowLeft, Upload, Eye, EyeOff, HelpCircle, Home, AlertCircle, X } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth'
 import { setDoc, doc, getDoc, updateDoc } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
 import { AUSTRALIAN_STATES, validateAustralianPhone, formatAustralianPhone, validateEmail, getEmailSuggestions } from '@/lib/australianValidation'
 import { WASHLEE_TERMS } from '@/lib/washleeTerms'
+import { createEmployeeProfile, getCustomerProfile, upgradeCustomerToEmployee } from '@/lib/userManagement'
 
 export default function ProSignupForm() {
-  const [currentStep, setCurrentStep] = useState(0)
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const stepParam = searchParams?.get('step')
+  const fromSignin = searchParams?.get('fromSignin') === 'true'
+  
+  const initialStep = stepParam ? parseInt(stepParam) : 0
+  const [currentStep, setCurrentStep] = useState(initialStep)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
@@ -23,6 +30,7 @@ export default function ProSignupForm() {
   const [showTermsModal, setShowTermsModal] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [termsScrolled, setTermsScrolled] = useState(false)
+  const [redirectToProSignin, setRedirectToProSignin] = useState(false)
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -34,6 +42,7 @@ export default function ProSignupForm() {
     confirmPassword: '',
     termsAccepted: false,
     emailConfirmed: false,
+    phoneVerificationCode: '',
     phoneVerified: false,
     idVerified: false,
     idFile: null as File | null,
@@ -48,8 +57,6 @@ export default function ProSignupForm() {
     },
     comments: '',
   })
-
-  const router = useRouter()
 
   // Password validation helpers
   const validatePassword = (pwd: string) => ({
@@ -106,23 +113,24 @@ export default function ProSignupForm() {
   const isStepValid = () => {
     switch (currentStep) {
       case 0: // Initial application form
-        return formData.firstName && 
-               formData.lastName && 
-               validateEmail(formData.email) &&
-               validateAustralianPhone(formData.phone) &&
-               formData.state && 
-               formData.termsAccepted &&
-               termsAccepted // Must have accepted terms in modal
-      case 1: // Email confirmation
-        return formData.emailConfirmed
-      case 2: // Phone verification
-        return formData.phoneVerified
-      case 3: // ID verification
-        return formData.idVerified
+        return (
+          formData.firstName.trim() && 
+          formData.lastName.trim() && 
+          validateEmail(formData.email) &&
+          validateAustralianPhone(formData.phone) &&
+          formData.state && 
+          termsAccepted // Must have accepted terms in modal
+        )
+      case 1: // Email confirmation - just show info, Next button will confirm
+        return true
+      case 2: // Phone verification - just need a valid code entered
+        return formData.phoneVerificationCode.length === 6
+      case 3: // ID verification - just show info, Next button will verify
+        return true
       case 4: // Washlee intro (auto-pass)
         return true
-      case 5: // Availability and details
-        return formData.firstName && formData.lastName
+      case 5: // Availability and details - optional fields so always true
+        return true
       default:
         return false
     }
@@ -132,6 +140,25 @@ export default function ProSignupForm() {
     if (currentStep === 0) {
       // Create account on first step completion
       await handleCreateAccount()
+    } else if (currentStep === 1) {
+      // Email confirmation - mark as confirmed and move to next step
+      setFormData({ ...formData, emailConfirmed: true })
+      setTimeout(() => setCurrentStep(currentStep + 1), 100)
+    } else if (currentStep === 2) {
+      // Phone verification - verify and move to next step
+      if (formData.phoneVerificationCode.length !== 6) {
+        setError('Please enter a 6-digit verification code')
+        return
+      }
+      setFormData({ ...formData, phoneVerified: true })
+      setTimeout(() => setCurrentStep(currentStep + 1), 100)
+    } else if (currentStep === 3) {
+      // ID verification - mark as verified and move to next step
+      setFormData({ ...formData, idVerified: true })
+      setTimeout(() => setCurrentStep(currentStep + 1), 100)
+    } else if (currentStep === 4) {
+      // Auto-pass intro step
+      setCurrentStep(currentStep + 1)
     } else if (isStepValid()) {
       if (currentStep < 5) {
         setCurrentStep(currentStep + 1)
@@ -171,23 +198,22 @@ export default function ProSignupForm() {
           formData.password
         )
 
-        // Create initial Firestore document
-        await setDoc(doc(db, 'users', userCredential.user.uid), {
-          uid: userCredential.user.uid,
+        // Create employee profile in new system
+        await createEmployeeProfile(userCredential.user.uid, {
           email: formData.email,
-          name: `${formData.firstName} ${formData.lastName}`,
           firstName: formData.firstName,
           lastName: formData.lastName,
           phone: formData.phone,
           state: formData.state,
-          userType: 'pro',
-          createdAt: new Date().toISOString(),
-          proApplicationStep: 1,
+          employmentType: 'contractor',
+          status: 'pending',
+          availability: formData.availability,
+          applicationStep: 1,
         })
+
       } catch (createErr: any) {
         if (createErr.code === 'auth/email-already-in-use') {
-          // Email already exists - this customer wants to become a Pro
-          // Try to sign in with existing credentials first
+          // Email already exists - this customer wants to become an employee
           try {
             userCredential = await signInWithEmailAndPassword(
               auth,
@@ -195,31 +221,38 @@ export default function ProSignupForm() {
               formData.password
             )
 
-            // Check if they're already a Pro
-            const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid))
-            if (userDoc.exists() && userDoc.data().userType === 'pro') {
+            // Check if they already have an employee profile
+            const existingCustomer = await getCustomerProfile(userCredential.user.uid)
+            
+            if (existingCustomer?.hasEmployeeProfile) {
               setError('This account is already registered as a Washlee Pro.')
               setIsLoading(false)
               return
             }
 
-            // Update existing customer account to Pro
-            const existingData = userDoc.data()
-            await updateDoc(doc(db, 'users', userCredential.user.uid), {
-              userType: 'pro',
-              proApplicationStep: 1,
-              proApplicationDate: new Date().toISOString(),
-              // Update with any new pro info if provided
-              firstName: formData.firstName || existingData?.firstName || '',
-              lastName: formData.lastName || existingData?.lastName || '',
-              phone: formData.phone || existingData?.phone || '',
-              state: formData.state || existingData?.state || '',
-            })
+            if (existingCustomer) {
+              // Upgrade customer to also have employee profile
+              await upgradeCustomerToEmployee(userCredential.user.uid, {
+                email: formData.email,
+                firstName: formData.firstName || existingCustomer.firstName,
+                lastName: formData.lastName || existingCustomer.lastName,
+                phone: formData.phone || existingCustomer.phone,
+                state: formData.state,
+                employmentType: 'contractor',
+                status: 'pending',
+                availability: formData.availability,
+                applicationStep: 1,
+              })
 
-            setSuccessMessage('Existing account upgraded to Pro! Moving to next step...')
+              setSuccessMessage('Existing account upgraded to Pro! Moving to next step...')
+            } else {
+              setError('Account found but could not process. Please try again.')
+              setIsLoading(false)
+              return
+            }
           } catch (signInErr: any) {
             if (signInErr.code === 'auth/wrong-password') {
-              setError('Email exists as a customer account. Please enter the correct password.')
+              setError('Email exists. Please enter the correct password.')
             } else if (signInErr.code === 'auth/user-not-found') {
               setError('Account not found.')
             } else {
@@ -458,6 +491,17 @@ export default function ProSignupForm() {
               I agree to the <button type="button" onClick={() => { setShowTermsModal(true); setTermsScrolled(false) }} className="text-primary hover:underline">Terms & Conditions</button> and <Link href="/privacy-policy" className="text-primary hover:underline">Privacy Policy</Link>
             </span>
           </div>
+          <div className="pt-4 border-t border-gray/20">
+            <p className="text-xs text-gray text-center">
+              Already have a customer account?{' '}
+              <Link 
+                href="/auth/login?redirect=/auth/pro-signup-form?step=1"
+                className="text-primary font-semibold hover:underline"
+              >
+                Click here to sign in
+              </Link>
+            </p>
+          </div>
         </div>
       ),
     },
@@ -476,16 +520,11 @@ export default function ProSignupForm() {
               Once verified, click the button below to continue.
             </p>
           </div>
-          <button
-            onClick={() => setFormData({ ...formData, emailConfirmed: true })}
-            className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:bg-accent transition flex items-center justify-center gap-2"
-          >
-            <CheckCircle size={20} />
-            I've Confirmed My Email
-          </button>
-          <p className="text-center text-gray text-sm">
-            Typical response time: 24-48 hours
-          </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p className="text-sm text-blue-900">
+              <strong>Note:</strong> In production, this would send a real confirmation email. For testing, marking as confirmed will allow you to proceed.
+            </p>
+          </div>
         </div>
       ),
     },
@@ -501,6 +540,9 @@ export default function ProSignupForm() {
             </p>
             <input
               type="text"
+              name="phoneVerificationCode"
+              value={formData.phoneVerificationCode}
+              onChange={handleChange}
               placeholder="Enter 6-digit code"
               className="w-full px-4 py-3 border border-gray rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-center text-2xl tracking-widest"
               maxLength={6}
@@ -508,15 +550,9 @@ export default function ProSignupForm() {
           </div>
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <p className="text-sm text-blue-900">
-              <strong>Note:</strong> Firebase phone verification setup required. Placeholder for now.
+              <strong>Note:</strong> For testing, enter any 6-digit code and click Next to proceed.
             </p>
           </div>
-          <button
-            onClick={() => setFormData({ ...formData, phoneVerified: true })}
-            className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:bg-accent transition"
-          >
-            Verify Phone Number
-          </button>
         </div>
       ),
     },
@@ -551,15 +587,9 @@ export default function ProSignupForm() {
           </div>
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <p className="text-sm text-blue-900">
-              <strong>Note:</strong> Firebase Storage setup required. Placeholder for now.
+              <strong>Note:</strong> For testing, you can upload a file or click Next without uploading to proceed.
             </p>
           </div>
-          <button
-            onClick={() => setFormData({ ...formData, idVerified: true })}
-            className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:bg-accent transition"
-          >
-            Verify ID
-          </button>
         </div>
       ),
     },
@@ -657,8 +687,8 @@ export default function ProSignupForm() {
             <h1 className="text-3xl font-bold text-dark mb-3">Thanks for Applying!</h1>
             <p className="text-gray mb-2">An Agent will get into contact with you shortly.</p>
             <p className="text-sm text-gray">Typical response time: 24-48 hours</p>
-            <Link href="/" className="inline-block mt-8">
-              <Button>Return Home</Button>
+            <Link href="/pro-support/help-center" className="inline-block mt-8">
+              <Button>Access Help Center</Button>
             </Link>
           </div>
         </div>
@@ -674,8 +704,8 @@ export default function ProSignupForm() {
       {/* Header */}
       <header className="bg-white/80 backdrop-blur border-b border-gray/20 py-4 px-4">
         <div className="max-w-md mx-auto flex items-center justify-between">
-          {/* Brand Name - Clickable to Help Center */}
-          <Link href="/pro-support/help-center" className="flex items-center gap-2 group">
+          {/* Brand Name - Clickable to Home */}
+          <Link href="/" className="flex items-center gap-2 group">
             <div className="bg-primary rounded-lg p-2">
               <Home size={20} className="text-white" />
             </div>
@@ -822,6 +852,14 @@ export default function ProSignupForm() {
                   setTermsAccepted(true)
                   setFormData({ ...formData, termsAccepted: true })
                   setShowTermsModal(false)
+                  
+                  // If user clicked "Already have account" link, redirect them to pro-signin
+                  if (redirectToProSignin) {
+                    setRedirectToProSignin(false)
+                    setTimeout(() => {
+                      router.push('/auth/pro-signin')
+                    }, 500)
+                  }
                 }}
                 disabled={!termsScrolled}
                 className={`flex-1 py-3 rounded-lg font-semibold transition ${

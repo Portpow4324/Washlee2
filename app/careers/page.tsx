@@ -180,7 +180,9 @@ export default function Careers() {
               <p className="text-gray mb-6 max-w-2xl mx-auto">
                 We're always looking for talented, passionate people. Send us your resume and tell us what you'd like to do at Washlee.
               </p>
-              <Button size="lg" className="text-white">View All Opportunities</Button>
+              <div className="flex justify-center">
+                <Button size="lg" className="text-white">View All Opportunities</Button>
+              </div>
             </div>
           </div>
         </section>

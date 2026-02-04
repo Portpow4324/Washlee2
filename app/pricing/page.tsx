@@ -5,11 +5,56 @@ import Footer from '@/components/Footer'
 import Button from '@/components/Button'
 import Card from '@/components/Card'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
+import { useAuth } from '@/lib/AuthContext'
+import { useRouter } from 'next/navigation'
 
 export default function Pricing() {
+  const { user, loading } = useAuth()
+  const router = useRouter()
   const [openFaq, setOpenFaq] = useState<number | null>(0)
+  const [weight, setWeight] = useState(5)
+  const [selectedAddons, setSelectedAddons] = useState<string[]>([])
+
+  const handleGetStarted = () => {
+    if (loading) return
+    if (user) {
+      // User is logged in, go to booking
+      router.push('/booking')
+    } else {
+      // User not logged in, go to signup
+      router.push('/auth/signup')
+    }
+  }
+
+  // Calculate pricing
+  const basePrice = weight * 3.0
+  const minOrder = 39
+  const totalBeforeAddons = Math.max(basePrice, minOrder)
+  
+  let addonsPrice = 0
+  selectedAddons.forEach(addon => {
+    switch (addon) {
+      case 'hang-dry':
+        addonsPrice += weight * 3.3
+        break
+      case 'delicates':
+        addonsPrice += weight * 4.4
+        break
+      case 'comforter':
+        addonsPrice += 25
+        break
+      case 'stain':
+        addonsPrice += 0.5
+        break
+      case 'ironing':
+        addonsPrice += weight * 6.6
+        break
+    }
+  })
+  
+  const totalPrice = totalBeforeAddons + addonsPrice
 
   return (
     <>
@@ -60,7 +105,7 @@ export default function Pricing() {
               </div>
             </div>
 
-            <Link href="/auth/signup">
+            <Link href="/booking">
               <Button size="lg" className="w-full">
                 Get Started
               </Button>
@@ -68,23 +113,158 @@ export default function Pricing() {
           </div>
 
           <div>
-            <h3 className="text-2xl font-bold text-dark mb-6">Example Pricing</h3>
-            <div className="space-y-4">
-              {[
-                { weight: '5 kg', price: '$15.00', label: 'Minimum' },
-                { weight: '11 kg', price: '$33.00', label: 'Average load' },
-                { weight: '23 kg', price: '$69.00', label: 'Large load' },
-                { weight: '34 kg', price: '$102.00', label: 'Family load' },
-              ].map((example, i) => (
-                <div key={i} className="flex justify-between items-center p-4 bg-light rounded-lg">
-                  <div>
-                    <p className="font-bold text-dark">{example.weight}</p>
-                    <p className="text-sm text-gray">{example.label}</p>
+            <h3 className="text-2xl font-bold text-dark mb-6">Price Calculator</h3>
+            
+            {/* Weight Slider */}
+            <Card className="p-6 mb-6">
+              <label className="block mb-4">
+                <p className="text-gray text-sm font-semibold mb-2">LAUNDRY WEIGHT (KG)</p>
+                <input
+                  type="range"
+                  min="5"
+                  max="50"
+                  step="1"
+                  value={weight}
+                  onChange={(e) => setWeight(parseInt(e.target.value))}
+                  className="w-full h-2 bg-light rounded-lg appearance-none cursor-pointer accent-primary"
+                />
+                <p className="text-4xl font-bold text-primary mt-3">{weight} kg</p>
+              </label>
+            </Card>
+
+            {/* Add-ons Selection */}
+            <Card className="p-6 mb-6">
+              <p className="text-gray text-sm font-semibold mb-4">ADD-ONS (OPTIONAL)</p>
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 p-3 border border-light rounded-lg cursor-pointer hover:bg-light transition">
+                  <input
+                    type="checkbox"
+                    checked={selectedAddons.includes('hang-dry')}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedAddons([...selectedAddons, 'hang-dry'])
+                      } else {
+                        setSelectedAddons(selectedAddons.filter(a => a !== 'hang-dry'))
+                      }
+                    }}
+                    className="w-4 h-4"
+                  />
+                  <div className="flex-1">
+                    <p className="font-semibold text-dark">Hang Dry</p>
+                    <p className="text-xs text-gray">+${(weight * 3.3).toFixed(2)}</p>
                   </div>
-                  <p className="text-2xl font-bold text-primary">{example.price}</p>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 border border-light rounded-lg cursor-pointer hover:bg-light transition">
+                  <input
+                    type="checkbox"
+                    checked={selectedAddons.includes('delicates')}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedAddons([...selectedAddons, 'delicates'])
+                      } else {
+                        setSelectedAddons(selectedAddons.filter(a => a !== 'delicates'))
+                      }
+                    }}
+                    className="w-4 h-4"
+                  />
+                  <div className="flex-1">
+                    <p className="font-semibold text-dark">Delicates Care</p>
+                    <p className="text-xs text-gray">+${(weight * 4.4).toFixed(2)}</p>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 border border-light rounded-lg cursor-pointer hover:bg-light transition">
+                  <input
+                    type="checkbox"
+                    checked={selectedAddons.includes('comforter')}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedAddons([...selectedAddons, 'comforter'])
+                      } else {
+                        setSelectedAddons(selectedAddons.filter(a => a !== 'comforter'))
+                      }
+                    }}
+                    className="w-4 h-4"
+                  />
+                  <div className="flex-1">
+                    <p className="font-semibold text-dark">Comforter Service</p>
+                    <p className="text-xs text-gray">+$25.00</p>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 border border-light rounded-lg cursor-pointer hover:bg-light transition">
+                  <input
+                    type="checkbox"
+                    checked={selectedAddons.includes('stain')}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedAddons([...selectedAddons, 'stain'])
+                      } else {
+                        setSelectedAddons(selectedAddons.filter(a => a !== 'stain'))
+                      }
+                    }}
+                    className="w-4 h-4"
+                  />
+                  <div className="flex-1">
+                    <p className="font-semibold text-dark">Stain Treatment</p>
+                    <p className="text-xs text-gray">+$0.50/item</p>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 border border-light rounded-lg cursor-pointer hover:bg-light transition">
+                  <input
+                    type="checkbox"
+                    checked={selectedAddons.includes('ironing')}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedAddons([...selectedAddons, 'ironing'])
+                      } else {
+                        setSelectedAddons(selectedAddons.filter(a => a !== 'ironing'))
+                      }
+                    }}
+                    className="w-4 h-4"
+                  />
+                  <div className="flex-1">
+                    <p className="font-semibold text-dark">Ironing</p>
+                    <p className="text-xs text-gray">+${(weight * 6.6).toFixed(2)}</p>
+                  </div>
+                </label>
+              </div>
+            </Card>
+
+            {/* Price Breakdown */}
+            <Card className="p-6 bg-gradient-to-br from-mint to-light">
+              <div className="space-y-3 mb-4">
+                <div className="flex justify-between">
+                  <span className="text-gray">Base Service ({weight} kg @ $3.00):</span>
+                  <span className="font-semibold text-dark">${Math.max(basePrice, 0).toFixed(2)}</span>
                 </div>
-              ))}
-            </div>
+                {basePrice < minOrder && (
+                  <div className="flex justify-between text-sm text-amber-600">
+                    <span>Minimum Order Applied:</span>
+                    <span>+${(minOrder - basePrice).toFixed(2)}</span>
+                  </div>
+                )}
+                {selectedAddons.length > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray">Add-ons:</span>
+                    <span className="font-semibold text-dark">+${addonsPrice.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+              <div className="border-t border-primary pt-3 flex justify-between items-center">
+                <span className="font-bold text-dark">Total:</span>
+                <span className="text-4xl font-bold text-primary">${totalPrice.toFixed(2)}</span>
+              </div>
+              <Button 
+                size="lg" 
+                className="w-full mt-6"
+                onClick={handleGetStarted}
+              >
+                Book Now
+              </Button>
+            </Card>
           </div>
         </div>
 
@@ -260,11 +440,13 @@ export default function Pricing() {
           <p className="text-lg text-white mb-8 opacity-90">
             First pickup included in your first order. No credit card required.
           </p>
-          <Link href="/auth/signup">
-            <Button size="lg" className="bg-primary text-white hover:bg-accent">
-              Get Started Today
-            </Button>
-          </Link>
+          <div className="flex justify-center">
+            <Link href="/auth/signup">
+              <Button size="lg" className="bg-primary text-white hover:bg-accent">
+                Get Started Today
+              </Button>
+            </Link>
+          </div>
         </div>
       </section>
 

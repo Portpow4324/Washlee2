@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react'
 import Card from '@/components/Card'
 import Button from '@/components/Button'
-import { Lock, Shield, LogOut, Eye, EyeOff, User, Mail } from 'lucide-react'
+import { Lock, Shield, LogOut, Eye, EyeOff, User, Mail, Loader } from 'lucide-react'
 import { useAuth } from '@/lib/AuthContext'
 import { db, auth } from '@/lib/firebase'
-import { collection, query, where, onSnapshot, Timestamp, doc, updateDoc } from 'firebase/firestore'
+import { collection, query, where, onSnapshot, Timestamp, doc, updateDoc, getDoc } from 'firebase/firestore'
 import { EmailAuthProvider, reauthenticateWithCredential, updateEmail } from 'firebase/auth'
 
 interface Session {
@@ -109,15 +109,45 @@ export default function Security() {
     try {
       if (user && userData) {
         const userRef = doc(db, 'users', user.uid)
+        
+        // Update the users collection
         await updateDoc(userRef, {
-          name: displayName.trim()
+          name: displayName.trim(),
+          updatedAt: new Date().toISOString()
         })
+
+        // Also update customer profile if it exists
+        if (userData.userType === 'customer' || !userData.userType) {
+          const customerRef = doc(db, 'customers', user.uid)
+          const customerSnap = await getDoc(customerRef)
+          if (customerSnap.exists()) {
+            await updateDoc(customerRef, {
+              firstName: displayName.trim().split(' ')[0],
+              lastName: displayName.trim().split(' ').slice(1).join(' ') || '',
+              updatedAt: new Date().toISOString()
+            })
+          }
+        }
+
+        // Also update employee profile if it exists
+        if (userData.userType === 'pro') {
+          const employeeRef = doc(db, 'employees', user.uid)
+          const employeeSnap = await getDoc(employeeRef)
+          if (employeeSnap.exists()) {
+            await updateDoc(employeeRef, {
+              firstName: displayName.trim().split(' ')[0],
+              lastName: displayName.trim().split(' ').slice(1).join(' ') || '',
+              updatedAt: new Date().toISOString()
+            })
+          }
+        }
 
         setSuccessMessage('✅ Name updated successfully!')
         setEditingField(null)
         setTimeout(() => setSuccessMessage(''), 3000)
       }
     } catch (err) {
+      console.error('Error updating name:', err)
       setErrorMessage(err instanceof Error ? err.message : 'Failed to update name')
     } finally {
       setIsUpdating(false)
@@ -213,8 +243,9 @@ export default function Security() {
                   <Button
                     onClick={handleUpdateName}
                     disabled={isUpdating || displayName === userData?.name}
-                    className="whitespace-nowrap"
+                    className="whitespace-nowrap flex items-center gap-2"
                   >
+                    {isUpdating && <Loader size={18} className="animate-spin" />}
                     {isUpdating ? 'Saving...' : 'Save'}
                   </Button>
                   <Button
@@ -224,6 +255,7 @@ export default function Security() {
                       setDisplayName(userData?.name || '')
                     }}
                     className="whitespace-nowrap"
+                    disabled={isUpdating}
                   >
                     Cancel
                   </Button>
@@ -266,7 +298,9 @@ export default function Security() {
                     <Button
                       onClick={handleChangeEmail}
                       disabled={isUpdating || !newEmail || !currentPassword}
+                      className="flex items-center gap-2"
                     >
+                      {isUpdating && <Loader size={18} className="animate-spin" />}
                       {isUpdating ? 'Updating...' : 'Confirm Change'}
                     </Button>
                     <Button
@@ -276,6 +310,7 @@ export default function Security() {
                         setNewEmail('')
                         setCurrentPassword('')
                       }}
+                      disabled={isUpdating}
                     >
                       Cancel
                     </Button>

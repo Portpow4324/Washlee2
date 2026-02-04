@@ -1,0 +1,355 @@
+/**
+ * COPY THIS ENTIRE CONTENT TO FIREBASE CONSOLE
+ * 
+ * Steps:
+ * 1. Go to Firebase Console (console.firebase.google.com)
+ * 2. Select your "washlee" project
+ * 3. Go to Firestore Database → Rules tab
+ * 4. Clear existing content
+ * 5. Paste this entire content
+ * 6. Click "Publish"
+ * 
+ * Then verify:
+ * - Go to Authentication → Users
+ * - Click a user → Edit → Custom Claims
+ * - For admins, add: { "admin": true }
+ * 
+ */
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================
+    // HELPERS
+    // ============================================
+    
+    // Check if user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+    
+    // Check if user is the document owner
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+    
+    // Check if user has admin claim
+    function isAdmin() {
+      return request.auth.token.admin == true;
+    }
+    
+    // ============================================
+    // EMPLOYEE COLLECTION
+    // ============================================
+    match /employees/{uid} {
+      
+      // User can read their own employee profile
+      allow read: if isAuth() && isOwner(uid);
+      
+      // User can write to their own profile (limited updates)
+      allow write: if isAuth() && isOwner(uid)
+        && request.resource.data.applicationType == 'employee'
+        && request.resource.data.uid == uid;
+      
+      // Admins can read any employee profile
+      allow read: if isAdmin();
+      
+      // Admins can update/manage employee profiles
+      allow write: if isAdmin();
+      
+      // Default deny all other access
+      allow read, write: if false;
+    }
+    
+    // ============================================
+    // CUSTOMERS COLLECTION
+    // ============================================
+    match /customers/{uid} {
+      
+      // User can read their own customer profile
+      allow read: if isAuth() && isOwner(uid);
+      
+      // User can write to their own profile (limited updates)
+      allow write: if isAuth() && isOwner(uid)
+        && request.resource.data.applicationType == 'customer'
+        && request.resource.data.uid == uid;
+      
+      // Admins can read any customer profile
+      allow read: if isAdmin();
+      
+      // Admins can update/manage customer profiles
+      allow write: if isAdmin();
+      
+      // Default deny all other access
+      allow read, write: if false;
+    }
+    
+    // ============================================
+    // USERS METADATA COLLECTION
+    // ============================================
+    match /users/{uid} {
+      
+      // User can read their own metadata
+      allow read: if isAuth() && isOwner(uid);
+      
+      // User can read others' metadata if they want (minimal info)
+      // Uncomment if needed for features like finding users
+      // allow read: if isAuth();
+      
+      // User can update their own preferences/settings
+      allow write: if isAuth() && isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.size() < 30;
+      
+      // Admins can read all user metadata
+      allow read: if isAdmin();
+      
+      // Admins can update user metadata (for management)
+      allow write: if isAdmin();
+      
+      // Default deny all other access
+      allow read, write: if false;
+    }
+    
+    // ============================================
+    // ADMIN COLLECTION
+    // ============================================
+    match /admin/{document=**} {
+      
+      // Only admins can access admin collection
+      allow read, write: if isAdmin();
+      
+      // Default deny
+      allow read, write: if false;
+    }
+    
+    // ============================================
+    // ORDERS COLLECTION (Example - Keep Existing)
+    // ============================================
+    match /orders/{orderId} {
+      
+      // User can read orders they created
+      allow read: if isAuth() && resource.data.customerId == request.auth.uid;
+      
+      // User can create orders
+      allow create: if isAuth() && request.resource.data.customerId == request.auth.uid;
+      
+      // User can update their own orders (before confirmed)
+      allow update: if isAuth() && resource.data.customerId == request.auth.uid
+        && resource.data.status != 'completed';
+      
+      // Employees can read orders assigned to them
+      allow read: if isAuth() && resource.data.employeeId == request.auth.uid;
+      
+      // Admins can read all orders
+      allow read: if isAdmin();
+      
+      // Admins can manage orders
+      allow write: if isAdmin();
+    }
+    
+    // ============================================
+    // OTHER COLLECTIONS (Keep Existing Rules)
+    // ============================================
+    
+    // Add your other collection rules here
+    // e.g., notifications, reviews, payments, etc.
+    
+    // ============================================
+    // DEFAULT DENY (SECURITY BEST PRACTICE)
+    // ============================================
+    match /{document=**} {
+      
+      // Deny all access by default
+      allow read, write: if false;
+    }
+  }
+}
+
+/*
+
+SECURITY RULES EXPLAINED:
+
+1. EMPLOYEE COLLECTION
+   - Users can read ONLY their own profile
+   - Users can write to ONLY their own profile (with validation)
+   - Admins can read and write all profiles
+   - This keeps employee data private and separate
+
+2. CUSTOMERS COLLECTION
+   - Users can read ONLY their own profile
+   - Users can write to ONLY their own profile (with validation)
+   - Admins can read and write all profiles
+   - This keeps customer data private and separate
+
+3. USERS METADATA
+   - Users can read their own metadata
+   - Users can update their own metadata (with size limits)
+   - Admins can manage all metadata
+   - This allows role management without cross-access
+
+4. ADMIN COLLECTION
+   - Only admins can access
+   - Used for system settings, logs, etc.
+
+5. DEFAULT DENY
+   - Anything not explicitly allowed is denied
+   - Security best practice
+   - Prevents accidental access
+
+KEY SECURITY FEATURES:
+
+✅ User Isolation
+   - Users cannot read other users' profiles
+   - Users cannot modify other users' profiles
+   - Enforced at database level
+
+✅ Role-Based Access
+   - Different rules for different collections
+   - Admin override for management
+   - Admins identified via custom claims
+
+✅ Validation
+   - applicationType must match collection
+   - uid must match document path
+   - Data size limits on metadata
+
+✅ No Data Leakage
+   - Employees cannot see customer data
+   - Customers cannot see employee data
+   - Clean separation enforced by rules
+
+✅ Admin Management
+   - Admins can view all data
+   - Admins can fix issues
+   - Admins can manage approvals/suspensions
+
+*/
+
+/*
+
+HOW TO DEPLOY:
+
+STEP 1: Copy Rules
+  - Copy all content above
+  
+STEP 2: Go to Firebase Console
+  - URL: https://console.firebase.google.com
+  - Select "washlee" project
+  - Left sidebar → Firestore Database
+  - Click "Rules" tab at top
+
+STEP 3: Replace Content
+  - Clear all existing content
+  - Paste the content above
+  - Do NOT change anything
+
+STEP 4: Test Rules
+  - Click "Test Rules" button
+  - Or use the Simulator tab
+  - Test scenarios to verify
+
+STEP 5: Publish
+  - Click "Publish" button
+  - Confirm the action
+  - Wait for deployment (usually <1 minute)
+
+STEP 6: Verify Deployment
+  - Try to read/write in your app
+  - Should work for authenticated users
+  - Should fail for unauthenticated users
+
+STEP 7: Set Admin Claims
+  - Go to Authentication → Users
+  - For each admin user:
+    - Click the user
+    - Scroll down to "Custom Claims"
+    - Enter: { "admin": true }
+    - Click Update
+  - These users now have admin access
+
+*/
+
+/*
+
+TESTING IN FIREBASE CONSOLE:
+
+Test 1: Authenticated user reads own employee profile
+  Path: /employees/user123
+  Context: { auth: { uid: "user123" } }
+  Expected: ✅ ALLOW
+
+Test 2: Unauthenticated user reads employee profile
+  Path: /employees/user123
+  Context: { auth: null }
+  Expected: ❌ DENY
+
+Test 3: User reads another user's employee profile
+  Path: /employees/user456
+  Context: { auth: { uid: "user123" } }
+  Expected: ❌ DENY
+
+Test 4: Admin reads any employee profile
+  Path: /employees/user456
+  Context: { auth: { uid: "admin123", token: { admin: true } } }
+  Expected: ✅ ALLOW
+
+Test 5: User updates own customer profile
+  Path: /customers/user123
+  Context: { auth: { uid: "user123" } }
+  Request: WRITE with valid data
+  Expected: ✅ ALLOW
+
+Test 6: User reads own user metadata
+  Path: /users/user123
+  Context: { auth: { uid: "user123" } }
+  Expected: ✅ ALLOW
+
+Test 7: Access to unknown collection
+  Path: /unknownCollection/doc123
+  Context: { auth: { uid: "user123" } }
+  Expected: ❌ DENY (default deny)
+
+*/
+
+/*
+
+TROUBLESHOOTING:
+
+Issue: "Permission denied" when user tries to read their profile
+  Check:
+    - Is user authenticated?
+    - Is user's UID correct?
+    - Did you specify uid in path? /employees/{uid} where uid = user's uid
+    - Check browser console for exact path
+
+Issue: Can read profile but can't update
+  Check:
+    - Are you trying to change applicationType?
+    - Are you trying to change uid?
+    - Is the new data valid?
+    - Add console.log to see what's failing
+
+Issue: Admin can't access anything
+  Check:
+    - Did you set custom claims? { "admin": true }
+    - Can take up to a few minutes to propagate
+    - Try logging out and back in
+    - Check Firebase Console → Authentication → Custom Claims
+
+Issue: Rules are blocking everything
+  Check:
+    - Did you replace ALL content?
+    - Did you click Publish?
+    - Check for syntax errors
+    - Use the Rules Simulator to debug
+
+Issue: Users seeing other users' data
+  Check:
+    - Rules syntax - should have isOwner check
+    - Make sure you're comparing request.auth.uid with uid
+    - Use Simulator to test specific paths
+
+*/
